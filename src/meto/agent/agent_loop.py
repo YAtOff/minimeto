@@ -90,12 +90,17 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                 {"role": "system", "content": system_prompt},
                 *agent.session.history,
             ]
-            reasoning_logger.log_system_prompt(system_prompt)
 
             resp = _get_client().chat.completions.create(
                 model=settings.DEFAULT_MODEL,
                 messages=messages,
                 tools=cast(Any, agent.tools),
+                extra_body={
+                    "thinking": {
+                        "type": "enabled",  # enable thinking
+                        "clear_thinking": False,  # keep reasoning across turns (preserved thinking)
+                    }
+                },
             )
 
             msg = resp.choices[0].message
@@ -104,6 +109,11 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
             # Log model reasoning and response
             reasoning_logger.log_model_response(resp, settings.DEFAULT_MODEL)
+
+            # Extract and log reasoning content
+            reasoning_content = getattr(msg, "reasoning_content", None) or ""
+            if reasoning_content:
+                reasoning_logger.log_reasoning(reasoning_content)
 
             assistant_message: dict[str, Any] = {
                 "role": "assistant",

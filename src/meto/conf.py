@@ -114,11 +114,6 @@ class Settings(BaseSettings):
         v.mkdir(parents=True, exist_ok=True)
         return v
 
-    LOG_SYSTEM_PROMPT: bool = Field(
-        default=False,
-        description="Log system prompt to JSONL and console.",
-    )
-
 
 # Global settings instance
 settings = Settings()
