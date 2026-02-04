@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING, Any, cast
 from openai import OpenAI
 
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
-from meto.agent.hooks import get_hooks_manager
 from meto.agent.reasoning_log import ReasoningLogger
 from meto.agent.system_prompt import build_system_prompt
 from meto.agent.tool_runner import run_tool  # pyright: ignore[reportImportCycles]
@@ -74,18 +73,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
     reasoning_logger = ReasoningLogger(agent.session.session_id, agent.name)
     try:
-        hooks_manager = get_hooks_manager() if agent.run_hooks else None
-
-        # Run session_start hooks (only for agents that opt into hooks)
-        if hooks_manager:
-            results = hooks_manager.run_hooks("session_start", session_id=agent.session.session_id)
-            # Log each hook result
-            for result in results:
-                reasoning_logger.log_hook_result(
-                    event_type="session_start",
-                    result=result,
-                )
-
         reasoning_logger.log_user_input(prompt)
         agent.session.history.append({"role": "user", "content": prompt})
         agent.session.session_logger.log_user(prompt)
@@ -98,7 +85,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
             # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
             # Our history is intentionally JSON-shaped, so treat these as dynamic.
-            system_prompt = build_system_prompt(agent.session, agent)
+            system_prompt = build_system_prompt(agent)
             messages: Any = [
                 {"role": "system", "content": system_prompt},
                 *agent.session.history,
@@ -169,38 +156,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     cast(dict[str, Any], arguments_any) if isinstance(arguments_any, dict) else {}
                 )
 
-                # Run pre_tool_use hooks
-                if hooks_manager:
-                    hook_results = hooks_manager.run_hooks(
-                        "pre_tool_use",
-                        session_id=agent.session.session_id,
-                        tool=fn_name,
-                        tool_call_id=tc_any.id,
-                        params=arguments,
-                    )
-                    # Log each hook result
-                    for result in hook_results:
-                        reasoning_logger.log_hook_result(
-                            event_type="pre_tool_use",
-                            result=result,
-                            tool_name=fn_name,
-                            tool_args=arguments,
-                        )
-                    # Check if any hook blocked the tool
-                    blocked_hooks = [r for r in hook_results if r.blocked]
-                    if blocked_hooks:
-                        hook_names = ", ".join(r.hook_name for r in blocked_hooks)
-                        block_msg = f"Tool blocked by hook: {hook_names}"
-                        agent.session.history.append(
-                            {
-                                "role": "tool",
-                                "tool_call_id": tc_any.id,
-                                "content": block_msg,
-                            }
-                        )
-                        agent.session.session_logger.log_tool(tc_any.id, block_msg)
-                        continue
-
                 # Execute tool (logging happens inside the tool runner)
                 tool_output = run_tool(
                     fn_name,
@@ -208,24 +163,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     reasoning_logger,
                     agent.session,
                 )
-
-                # Run post_tool_use hooks
-                if hooks_manager:
-                    hook_results = hooks_manager.run_hooks(
-                        "post_tool_use",
-                        session_id=agent.session.session_id,
-                        tool=fn_name,
-                        tool_call_id=tc_any.id,
-                        params=arguments,
-                        result=tool_output[:1000] if tool_output else None,  # Truncate for hooks
-                    )
-                    # Log each hook result
-                    for result in hook_results:
-                        reasoning_logger.log_hook_result(
-                            event_type="post_tool_use",
-                            result=result,
-                            tool_name=fn_name,
-                        )
 
                 agent.session.history.append(
                     {

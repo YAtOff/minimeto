@@ -17,23 +17,16 @@ import subprocess
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
-from prompt_toolkit.shortcuts import confirm
-from rich.console import Console
-from rich.panel import Panel
 
-from meto.agent.agent import Agent
-from meto.agent.loaders import get_skill_loader
-from meto.agent.permission_policy import PERMISSION_REQUIRED
 from meto.agent.session import Session
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
-from meto.agent.todo import TodoManager
 from meto.conf import settings
 
 # Tool runtime / execution.
@@ -154,17 +147,6 @@ def _write_file(path: str, content: str) -> str:
         return f"Error writing file {path}: {ex}"
 
 
-def _manage_todos(todos: TodoManager, items: list[dict[str, Any]]) -> str:
-    """Update the todo list for a session."""
-
-    try:
-        result = todos.update(items)
-        todos.print_rich()
-        return result
-    except ValueError as e:
-        return f"Error: {e}"
-
-
 def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = False) -> str:
     """Search for pattern in files using ripgrep (rg) with fallback to grep/Select-String."""
 
@@ -246,59 +228,6 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
         return f"Error fetching {url}: {ex}"
 
 
-def _execute_task(
-    prompt: str,
-    agent_name: str,
-    parent_session: Session,
-    description: str | None = None,
-) -> str:
-    """Execute task in isolated subagent via direct `run_agent_loop` call."""
-
-    from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
-
-    console = Console()
-
-    # Build banner content
-    agent_line = f"[bold cyan]{agent_name}[/bold cyan]"
-    if description:
-        banner_content = f"{agent_line}\n[dim]{description}[/dim]"
-    else:
-        banner_content = agent_line
-
-    # Show start banner
-    console.print()
-    console.print(
-        Panel(
-            banner_content,
-            title="[dim]-> Starting subagent[/dim]",
-            border_style="magenta",
-            padding=(0, 1),
-        )
-    )
-
-    # Run subagent
-    try:
-        agent = Agent.subagent(agent_name, parent_session)
-        # Allow subagents that have access to `run_task` to spawn further subagents.
-        output = "\n".join(run_agent_loop(prompt, agent))
-        result = truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
-    except Exception as ex:
-        result = f"(subagent error: {ex})"
-
-    # Show end banner
-    console.print(
-        Panel(
-            banner_content,
-            title="[dim]<- Subagent finished[/dim]",
-            border_style="magenta",
-            padding=(0, 1),
-        )
-    )
-    console.print()
-
-    return result
-
-
 def _ask_user_question(question: str) -> str:
     """Ask user a question using prompt_toolkit and return response."""
 
@@ -312,25 +241,6 @@ def _ask_user_question(question: str) -> str:
         return "(user cancelled input)"
     except OSError as ex:
         return f"(error getting user input: {ex})"
-
-
-def _prompt_permission(tool_name: str, detail: str) -> bool:
-    """Prompt user for tool permission using prompt_toolkit."""
-    try:
-        return confirm(f"Run {tool_name}: {detail}? ", suffix=" (y/n) ")
-    except (EOFError, KeyboardInterrupt):
-        return False
-
-
-def _load_skill(skill_name: str) -> str:
-    """Load skill content and return it."""
-    try:
-        skill_loader = get_skill_loader()
-        return skill_loader.get_skill_content(skill_name)
-    except ValueError as e:
-        return f"Error: {e}"
-    except OSError as ex:
-        return f"Error: Failed to load skill '{skill_name}': {ex}"
 
 
 # Type alias for tool handler functions
@@ -379,34 +289,10 @@ def _handle_fetch(parameters: dict[str, Any], _session: Session | None) -> str:
     return _fetch(url, max_bytes)
 
 
-def _handle_manage_todos(parameters: dict[str, Any], session: Session | None) -> str:
-    """Handle todo list management."""
-    if session is None:
-        return "Error: session required for manage_todos"
-    items = parameters.get("items", [])
-    return _manage_todos(session.todos, cast(list[dict[str, Any]], items))
-
-
-def _handle_run_task(parameters: dict[str, Any], session: Session | None) -> str:
-    """Handle subagent task execution."""
-    if session is None:
-        return "Error: session required for run_task"
-    description = cast(str, parameters.get("description", ""))
-    prompt = cast(str, parameters.get("prompt", ""))
-    agent_name = cast(str, parameters.get("agent_name", ""))
-    return _execute_task(prompt, agent_name, session, description)
-
-
 def _handle_ask_user_question(parameters: dict[str, Any], _session: Session | None) -> str:
     """Handle user question prompting."""
     question = parameters.get("question", "")
     return _ask_user_question(question)
-
-
-def _handle_load_skill(parameters: dict[str, Any], _session: Session | None) -> str:
-    """Handle skill loading."""
-    skill_name = parameters.get("skill_name", "")
-    return _load_skill(skill_name)
 
 
 # Dispatch table mapping tool names to their handler functions
@@ -417,10 +303,7 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "write_file": _handle_write_file,
     "grep_search": _handle_grep_search,
     "fetch": _handle_fetch,
-    "manage_todos": _handle_manage_todos,
-    "run_task": _handle_run_task,
     "ask_user_question": _handle_ask_user_question,
-    "load_skill": _handle_load_skill,
 }
 
 
@@ -448,20 +331,6 @@ def run_tool(
     """
     if logger:
         logger.log_tool_selection(tool_name, parameters)
-
-    # Determine yolo_mode from session
-    yolo_mode = session.yolo_mode if session else False
-
-    # Check permission if required and not in yolo mode
-    if not yolo_mode:
-        if permission_config := PERMISSION_REQUIRED.get(tool_name, None):
-            if permission_config.is_required(parameters):
-                detail = permission_config.prompt_detail(parameters)
-                if not _prompt_permission(tool_name, detail):
-                    return f"({tool_name} cancelled by user)"
-        else:
-            if not _prompt_permission(tool_name, "(no details available)"):
-                return f"({tool_name} cancelled by user)"
 
     tool_output = ""
     handler = _TOOL_HANDLERS.get(tool_name)

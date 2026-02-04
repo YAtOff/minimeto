@@ -74,16 +74,11 @@ class Settings(BaseSettings):
     # --- Directories ---
 
     SESSION_DIR: Path = Field(
-        default=Path.home() / ".meto" / "sessions",
+        default=Path.home() / ".minimeto" / "sessions",
         description="Directory to store session files.",
     )
 
-    PLAN_DIR: Path = Field(
-        default=Path.home() / ".meto" / "plans",
-        description="Directory to store plan files.",
-    )
-
-    @field_validator("SESSION_DIR", "PLAN_DIR")
+    @field_validator("SESSION_DIR")
     @classmethod
     def ensure_dir_exists(cls, v: Path) -> Path:
         v.mkdir(parents=True, exist_ok=True)
@@ -94,25 +89,15 @@ class Settings(BaseSettings):
         description="Directory for user-defined agent files.",
     )
 
-    COMMANDS_DIR: Path = Field(
-        default=Path.cwd() / ".meto" / "commands",
-        description="Directory for user-defined command files.",
-    )
-
     SKILLS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "skills",
         description="Directory for skill directories.",
     )
 
-    HOOKS_FILE: Path = Field(
-        default=Path.cwd() / ".meto" / "hooks.yaml",
-        description="Path to hooks configuration file.",
-    )
-
     # --- Logging ---
 
     LOG_DIR: Path = Field(
-        default=Path.home() / ".meto" / "logs",
+        default=Path.home() / ".minimeto" / "logs",
         description="Directory for agent reasoning trace logs.",
     )
 
@@ -132,11 +117,6 @@ class Settings(BaseSettings):
     LOG_SYSTEM_PROMPT: bool = Field(
         default=False,
         description="Log system prompt to JSONL and console.",
-    )
-
-    YOLO_MODE: bool = Field(
-        default=False,
-        description="Skip permission prompts for tools.",
     )
 
 

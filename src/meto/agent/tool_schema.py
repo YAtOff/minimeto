@@ -23,9 +23,8 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "shell",
             "description": (
-                "Execute a shell command and return its output. "
-                "Use it to inspect files, edit files, run tests, etc. "
-                "For complex subtasks, spawn a subagent by running: meto --one-shot"
+                "Execute shell commands. Use ONLY when other tools cannot do the job. "
+                "Use read_file/write_file/fetch/grep_search with GREATER PRIORITY."
             ),
             "parameters": {
                 "type": "object",
@@ -176,76 +175,6 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
-            "name": "manage_todos",
-            "description": (
-                "Update the todo list. Use to plan and track progress on multi-step todos. "
-                "Mark todos in_progress before starting, completed when done. "
-                "Only ONE todo can be in_progress at a time."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "items": {
-                        "type": "array",
-                        "description": "Complete list of todos (replaces existing)",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "content": {
-                                    "type": "string",
-                                    "description": "Todo description",
-                                },
-                                "status": {
-                                    "type": "string",
-                                    "enum": ["pending", "in_progress", "completed"],
-                                    "description": "Todo status",
-                                },
-                                "activeForm": {
-                                    "type": "string",
-                                    "description": "Present tense action, e.g. 'Reading files'",
-                                },
-                            },
-                            "required": ["content", "status", "activeForm"],
-                        },
-                    }
-                },
-                "required": ["items"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_task",
-            "description": (
-                "Spawn subagent for isolated subtask. Each agent type has specific tools. "
-                "Use for: exploration (read-only), planning (design), coding (implementation)."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "description": {
-                        "type": "string",
-                        "description": "Short task name (3-5 words)",
-                    },
-                    "prompt": {
-                        "type": "string",
-                        "description": "Detailed instructions for subagent",
-                    },
-                    "agent_name": {
-                        "type": "string",
-                        "description": "Name of agent to spawn",
-                    },
-                },
-                "required": ["description", "prompt", "agent_name"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "ask_user_question",
             "description": "Ask the user a question and return their response",
             "parameters": {
@@ -257,28 +186,6 @@ TOOLS: list[dict[str, Any]] = [
                     }
                 },
                 "required": ["question"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "load_skill",
-            "description": (
-                "Load domain expertise for specialized tasks. "
-                "Use when you need domain-specific knowledge not in your base knowledge. "
-                "Available skills are listed in the system prompt."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "skill_name": {
-                        "type": "string",
-                        "description": "Name of skill to load (e.g., 'pdf', 'commit-message')",
-                    }
-                },
-                "required": ["skill_name"],
                 "additionalProperties": False,
             },
         },

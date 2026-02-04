@@ -1,7 +1,7 @@
 """Shell execution utilities.
 
 Shared utilities for picking shell runners and executing shell commands.
-Used by both tool execution and hooks system.
+Used by tool execution.
 """
 
 from __future__ import annotations

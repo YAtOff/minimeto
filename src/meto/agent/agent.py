@@ -3,7 +3,6 @@
 An Agent bundles:
 - a session (conversation history + todos)
 - an allowed tool set (OpenAI tool schemas)
-- optional lifecycle hooks
 - a max turn budget for the tool-calling loop
 
 Main agents are stateful (shared session); subagents are isolated (fresh session).
@@ -14,10 +13,25 @@ from __future__ import annotations
 from typing import Any
 
 from meto.agent.exceptions import SubagentError
-from meto.agent.loaders import get_all_agents, get_tools_for_agent
-from meto.agent.modes import SessionMode
 from meto.agent.session import NullSessionLogger, Session
+from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
+
+
+def get_tools_for_agent(allowed_tools: list[str] | str) -> list[dict[str, Any]]:
+    """Return the list of tool schemas for the given allowlist.
+
+    Args:
+        allowed_tools: "*" or a list of tool names.
+
+    Returns:
+        List of tool schemas.
+    """
+    if allowed_tools == "*":
+        return TOOLS
+
+    allowed_set = set(allowed_tools)
+    return [tool for tool in TOOLS if tool["function"]["name"] in allowed_set]
 
 
 class Agent:
@@ -34,7 +48,6 @@ class Agent:
     session: Session
     tools: list[dict[str, Any]]
     max_turns: int
-    run_hooks: bool
 
     @classmethod
     def main(cls, session: Session) -> Agent:
@@ -43,7 +56,6 @@ class Agent:
         The main agent:
         - reuses the provided Session across prompts
         - has access to all tools
-        - runs hooks (configured globally via the hooks file)
         """
         return cls(
             name="main",
@@ -51,22 +63,24 @@ class Agent:
             session=session,
             allowed_tools="*",
             max_turns=settings.MAIN_AGENT_MAX_TURNS,
-            run_hooks=True,
         )
 
     @classmethod
-    def subagent(cls, name: str, parent_session: Session, mode: SessionMode | None = None) -> Agent:
+    def subagent(cls, name: str, parent_session: Session) -> Agent:
         """Create an isolated subagent.
 
         Subagents run with a fresh session (no shared history) and a stricter
-        tool allowlist defined by the agent registry. They never run hooks.
+        tool allowlist defined by the agent registry.
 
         Args:
             name: Name of the agent to create
-            parent_session: Parent session to inherit yolo_mode from
-            mode: Optional mode to apply to the subagent's session (for plan mode)
+            parent_session: Parent session
         """
-        all_agents = get_all_agents()
+        del (
+            parent_session
+        )  # Subagents don't share session state, so ignore this argument for now. --- IGNORE ---
+
+        all_agents = {}
         agent_config = all_agents.get(name)
 
         if agent_config:
@@ -77,12 +91,9 @@ class Agent:
                 prompt=prompt,
                 session=Session(
                     session_logger_cls=NullSessionLogger,
-                    yolo_mode=parent_session.yolo_mode,
-                    mode=mode,
                 ),
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
-                run_hooks=False,
             )
 
         available = ", ".join(sorted(all_agents.keys()))
@@ -97,19 +108,18 @@ class Agent:
 
         Args:
             allowed_tools: Tool allowlist for the forked agent
-            parent_session: Parent session to inherit yolo_mode from
+            parent_session: Parent session
         """
+        del (
+            parent_session
+        )  # Subagents don't share session state, so ignore this argument for now. --- IGNORE ---
+
         return cls(
             name="fork",
             prompt="",
-            session=Session(
-                session_logger_cls=NullSessionLogger,
-                yolo_mode=parent_session.yolo_mode,
-                mode=None,
-            ),
+            session=Session(session_logger_cls=NullSessionLogger),
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
-            run_hooks=False,
         )
 
     def __init__(
@@ -119,7 +129,6 @@ class Agent:
         session: Session,
         allowed_tools: list[str] | str,
         max_turns: int,
-        run_hooks: bool = False,
     ) -> None:
         """Create an Agent.
 
@@ -129,13 +138,11 @@ class Agent:
             session: Conversation session (history + todos).
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
-            run_hooks: If True, run lifecycle hooks for this agent.
         """
         self.name = name
         self.prompt = prompt
         self.session = session
         self.max_turns = max_turns
-        self.run_hooks = run_hooks
 
         self.tools = get_tools_for_agent(allowed_tools)
 
