@@ -186,11 +186,34 @@ def get_session_info(path: Path) -> dict[str, Any]:
     }
 
 
+class SessionHistory(list[dict[str, Any]]):
+    """List that auto-logs appends to session_logger."""
+
+    _session_logger: SessionLogger
+
+    def __init__(
+        self, session_logger: SessionLogger, initial_data: list[dict[str, Any]] | None = None
+    ) -> None:
+        super().__init__(initial_data or [])
+        self._session_logger = session_logger
+
+    @override
+    def append(self, item: dict[str, Any]) -> None:
+        super().append(item)
+        role = item.get("role")
+        if role == "user":
+            self._session_logger.log_user(item["content"])
+        elif role == "assistant":
+            self._session_logger.log_assistant(item.get("content"), item.get("tool_calls"))
+        elif role == "tool":
+            self._session_logger.log_tool(item["tool_call_id"], item["content"])
+
+
 class Session:
     """Wraps session_id, history and session_logger for unified session management."""
 
     session_id: str
-    history: list[dict[str, Any]]
+    history: SessionHistory
     session_logger_cls: type[SessionLogger]
     session_logger: SessionLogger
 
@@ -202,27 +225,9 @@ class Session:
         self.session_logger_cls = session_logger_cls or FileSessionLogger
         if sid:
             self.session_id = sid
-            self.history = load_session(sid)
             self.session_logger = self.session_logger_cls(sid)
+            self.history = SessionHistory(self.session_logger, load_session(sid))
         else:
             self.session_id = generate_session_id()
-            self.history = []
             self.session_logger = self.session_logger_cls(self.session_id)
-
-    def clear(self) -> None:
-        """Clear history and start new session with new ID."""
-        self.history.clear()
-        self.session_id = generate_session_id()
-        self.session_logger = self.session_logger_cls(self.session_id)
-
-    def renew(self) -> None:
-        """Generate new session ID with current history preserved."""
-        self.session_id = generate_session_id()
-        self.session_logger = self.session_logger_cls(self.session_id)
-        for msg in self.history:
-            if msg["role"] == "user":
-                self.session_logger.log_user(msg["content"])
-            elif msg["role"] == "assistant":
-                self.session_logger.log_assistant(msg["content"], msg.get("tool_calls"))
-            elif msg["role"] == "tool":
-                self.session_logger.log_tool(msg["tool_call_id"], msg["content"])
+            self.history = SessionHistory(self.session_logger)

@@ -75,7 +75,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
     try:
         reasoning_logger.log_user_input(prompt)
         agent.session.history.append({"role": "user", "content": prompt})
-        agent.session.session_logger.log_user(prompt)
 
         for _turn in range(agent.max_turns):
             # Check for interruption at the start of each turn
@@ -125,9 +124,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                 assistant_message["prompt_tokens"] = resp.usage.prompt_tokens
                 assistant_message["completion_tokens"] = resp.usage.completion_tokens
             agent.session.history.append(assistant_message)
-            agent.session.session_logger.log_assistant(
-                assistant_message["content"], assistant_message.get("tool_calls")
-            )
 
             if assistant_content:
                 yield assistant_content
@@ -159,7 +155,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                 except (TypeError, json.JSONDecodeError) as e:
                     arguments_any = {}
                     logger.error(
-                        f"[{reasoning_logger.session_id}] Failed to parse arguments for {fn_name}: {e}"
+                        f"Failed to parse arguments for {fn_name}: {e}"
                     )
 
                 arguments = (
@@ -181,7 +177,6 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                         "content": tool_output,
                     }
                 )
-                agent.session.session_logger.log_tool(tc_any.id, tool_output)
 
         reasoning_logger.log_loop_completion(f"Reached max turns ({agent.max_turns})")
         raise MaxStepsExceededError(f"Exceeded maximum of {agent.max_turns} turns")
