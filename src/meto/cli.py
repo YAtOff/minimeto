@@ -11,6 +11,7 @@ from prompt_toolkit.enums import EditingMode
 
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
+from meto.agent.command import execute_chat_command
 from meto.agent.exceptions import AgentInterrupted
 from meto.agent.session import Session
 
@@ -27,6 +28,14 @@ def _run_single_prompt(
         user_input: Raw user input (may be a slash command or regular prompt)
         session: Session instance for conversation history
     """
+    if user_input.startswith("/"):
+        success, output = execute_chat_command(user_input, session)
+        if success:
+            if output:
+                print(output, flush=True)
+            return
+        # Unknown command falls through to agent
+
     for output in run_agent_loop(user_input, Agent.main(session)):
         print(output, flush=True)
 
@@ -40,7 +49,10 @@ def interactive_loop(session: Session) -> None:
         except (EOFError, KeyboardInterrupt):
             return
 
-        _run_single_prompt(user_input, session)
+        try:
+            _run_single_prompt(user_input, session)
+        except typer.Exit:
+            return
 
 
 @app.callback(invoke_without_command=True)
