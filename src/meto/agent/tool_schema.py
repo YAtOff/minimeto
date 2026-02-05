@@ -11,11 +11,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from meto.agent.shell import get_shell_name
+
 # Model-facing tool schemas (OpenAI function calling / tools API).
 #
 # Important architectural rule:
 # - This module must stay import-light and must not import tool runtime code.
 # - Tool execution lives in `meto.agent.tool_runner`.
+
+SHELL_NAME = get_shell_name()
 
 TOOLS: list[dict[str, Any]] = [
     {
@@ -23,7 +27,8 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "shell",
             "description": (
-                "Execute shell commands. Use ONLY when other tools cannot do the job. "
+                f"Execute shell commands using {SHELL_NAME}. "
+                "Use ONLY when other tools cannot do the job. "
                 "Use read_file/write_file/fetch/grep_search with GREATER PRIORITY."
             ),
             "parameters": {

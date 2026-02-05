@@ -13,6 +13,17 @@ import subprocess
 from meto.conf import settings
 
 
+def get_shell_name() -> str:
+    """Return the name of the detected shell for display purposes."""
+    if shutil.which("bash"):
+        return "bash (Git Bash/WSL)"
+    if shutil.which("pwsh"):
+        return "PowerShell Core"
+    if shutil.which("powershell"):
+        return "Windows PowerShell"
+    return "system default shell"
+
+
 def pick_shell_runner() -> list[str] | None:
     """Pick an available shell runner.
 
