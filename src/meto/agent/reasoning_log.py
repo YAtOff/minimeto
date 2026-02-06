@@ -9,7 +9,10 @@ This module keeps the logging concerns isolated from the agent loop/tool runner.
 
 import json
 import logging
+import random
 from datetime import UTC, datetime
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, override
 
 from rich.console import Console
@@ -31,38 +34,39 @@ class JSONFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
-            "session_id": getattr(record, "session_id", None),
             "agent_name": getattr(record, "agent_name", None),
-            "agent_run_id": getattr(record, "agent_run_id", None),
             "turn": getattr(record, "turn", None),
         }
 
         return json.dumps(log_obj)
 
 
+@lru_cache(maxsize=1)
+def reasoning_log_file() -> Path:
+    """Generate actual log file path with timestamp and random suffix."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
+    return settings.LOG_DIR / f"agent_reasoning_{timestamp}_{random_suffix}.jsonl"
+
+
 class ReasoningLogger:
     """Structured logging for agent reasoning with JSON file + colored stderr."""
 
-    session_id: str
     agent_name: str
-    agent_run_id: str | None
     turn_count: int
     console: Console
 
     _logger: logging.Logger
     _json_handler: logging.FileHandler | None
 
-    def __init__(self, session_id: str, agent_name: str, agent_run_id: str | None = None) -> None:
-        self.session_id = session_id
+    def __init__(self, agent_name: str) -> None:
         self.agent_name = agent_name
-        self.agent_run_id = agent_run_id or str(datetime.now().timestamp())
         self.turn_count = 0
         self.console = Console(stderr=True)
 
         # Instance-specific logger to avoid accumulating handlers on a module-global logger.
-        self._logger = logging.getLogger(
-            f"meto.agent.reasoning.{self.session_id}.{self.agent_run_id}"
-        )
+        random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
+        self._logger = logging.getLogger(f"meto.agent.reasoning.{self.agent_name}.{random_suffix}")
         self._logger.setLevel(logging.INFO)
         self._logger.propagate = False
 
@@ -76,7 +80,7 @@ class ReasoningLogger:
         self._json_handler = None
 
         # JSON file handler
-        json_handler = logging.FileHandler(settings.log_file, encoding="utf-8")
+        json_handler = logging.FileHandler(reasoning_log_file(), encoding="utf-8")
         json_handler.setFormatter(JSONFormatter())
         self._logger.addHandler(json_handler)
         self._json_handler = json_handler
@@ -98,9 +102,7 @@ class ReasoningLogger:
     def _log(self, level: int, msg: str, **kwargs: Any) -> None:
         """Internal log method that adds session context."""
         extra = {
-            "session_id": self.session_id,
             "agent_name": self.agent_name,
-            "agent_run_id": self.agent_run_id,
             **kwargs,
         }
         self._logger.log(level, msg, extra=extra)
@@ -112,7 +114,7 @@ class ReasoningLogger:
 
     def log_api_request(self, messages: list[dict[str, Any]]) -> None:
         """Log the messages being sent to the model."""
-        self._logger.debug(f"[{self.session_id}] API request with {len(messages)} messages")
+        self._logger.debug(f"API request with {len(messages)} messages")
 
     def log_model_response(self, response: Any, _model: str) -> None:
         """Log the raw model response."""

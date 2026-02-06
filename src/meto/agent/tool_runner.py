@@ -17,7 +17,7 @@ import subprocess
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any
 from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -25,7 +25,6 @@ from urllib.request import Request, urlopen
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
 
-from meto.agent.session import Session
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
 
@@ -33,21 +32,6 @@ from meto.conf import settings
 #
 # Important architectural rule:
 # - This module must not import `meto.agent.loop` or `meto.cli`.
-
-
-class ToolRunner(Protocol):
-    """Protocol for objects that can execute a named tool call."""
-
-    def run_tool(
-        self,
-        tool_name: str,
-        parameters: dict[str, Any],
-        logger: Any | None = None,
-        session: Session | None = None,
-    ) -> str: ...
-
-
-SubagentExecutor = Callable[[str, str, str | None], str]
 
 
 def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:
@@ -244,16 +228,16 @@ def _ask_user_question(question: str) -> str:
 
 
 # Type alias for tool handler functions
-ToolHandler = Callable[[dict[str, Any], Session | None], str]
+ToolHandler = Callable[[dict[str, Any]], str]
 
 
-def _handle_shell(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_shell(parameters: dict[str, Any]) -> str:
     """Handle shell command execution."""
     command = parameters.get("command", "")
     return run_shell(command)
 
 
-def _handle_list_dir(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_list_dir(parameters: dict[str, Any]) -> str:
     """Handle directory listing."""
     path = parameters.get("path", ".")
     recursive = parameters.get("recursive", False)
@@ -261,20 +245,20 @@ def _handle_list_dir(parameters: dict[str, Any], _session: Session | None) -> st
     return _list_directory(path, recursive, include_hidden)
 
 
-def _handle_read_file(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_read_file(parameters: dict[str, Any]) -> str:
     """Handle file reading."""
     path = parameters.get("path", "")
     return _read_file(path)
 
 
-def _handle_write_file(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_write_file(parameters: dict[str, Any]) -> str:
     """Handle file writing."""
     path = parameters.get("path", "")
     content = parameters.get("content", "")
     return _write_file(path, content)
 
 
-def _handle_grep_search(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_grep_search(parameters: dict[str, Any]) -> str:
     """Handle pattern search."""
     pattern = parameters.get("pattern", "")
     path = parameters.get("path", ".")
@@ -282,14 +266,14 @@ def _handle_grep_search(parameters: dict[str, Any], _session: Session | None) ->
     return _run_grep_search(pattern, path, case_insensitive)
 
 
-def _handle_fetch(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_fetch(parameters: dict[str, Any]) -> str:
     """Handle URL fetching."""
     url = parameters.get("url", "")
     max_bytes = parameters.get("max_bytes", 100000)
     return _fetch(url, max_bytes)
 
 
-def _handle_ask_user_question(parameters: dict[str, Any], _session: Session | None) -> str:
+def _handle_ask_user_question(parameters: dict[str, Any]) -> str:
     """Handle user question prompting."""
     question = parameters.get("question", "")
     return _ask_user_question(question)
@@ -311,7 +295,6 @@ def run_tool(
     tool_name: str,
     parameters: dict[str, Any],
     logger: Any | None = None,
-    session: Session | None = None,
 ) -> str:
     """Dispatch and execute a single tool call.
 
@@ -319,7 +302,6 @@ def run_tool(
     tools requested by the model.
 
     Notes:
-        - Permission prompting is enforced here (unless session.yolo_mode is enabled).
         - The return value is always a human-readable string that is appended to
           the conversation history as a tool message.
 
@@ -327,7 +309,6 @@ def run_tool(
         tool_name: Name of the tool to execute.
         parameters: JSON-like tool arguments.
         logger: Optional reasoning logger for structured trace output.
-        session: Session object (required for most tools).
     """
     if logger:
         logger.log_tool_selection(tool_name, parameters)
@@ -339,7 +320,7 @@ def run_tool(
         tool_output = f"Error: Unknown tool: {tool_name}"
     else:
         try:
-            tool_output = handler(parameters, session)
+            tool_output = handler(parameters)
             if logger:
                 logger.log_tool_execution(tool_name, tool_output, error=False)
         except Exception as e:

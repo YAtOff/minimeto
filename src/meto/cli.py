@@ -36,7 +36,9 @@ def _run_single_prompt(
             return
         # Unknown command falls through to agent
 
-    for output in run_agent_loop(user_input, Agent.main(session)):
+    agent = Agent.main()
+    history = session.history
+    for output in run_agent_loop(agent, user_input, history):
         print(output, flush=True)
 
 
@@ -85,7 +87,7 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    session = Session(sid=session_id) if session_id else Session()
+    session = Session.load(session_id) if session_id else Session.new()
 
     if one_shot:
         # Determine input source based on precedence rules

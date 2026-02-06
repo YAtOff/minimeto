@@ -49,11 +49,13 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
-def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
+def run_agent_loop(
+    agent: Agent, prompt: str, history: list[dict[str, Any]]
+) -> Generator[str, None, None]:
     """Run the agent loop for a single user prompt.
 
     In interactive mode, this function is called repeatedly and shares
-    module state (`agent.session.history`) so the conversation continues.
+    module state (`history`) so the conversation continues.
 
     Raises:
         AgentInterrupted: If the user interrupts with Ctrl-C during execution.
@@ -71,10 +73,10 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
 
     original_handler = signal.signal(signal.SIGINT, signal_handler)
 
-    reasoning_logger = ReasoningLogger(agent.session.session_id, agent.name)
+    reasoning_logger = ReasoningLogger(agent.name)
     try:
         reasoning_logger.log_user_input(prompt)
-        agent.session.history.append({"role": "user", "content": prompt})
+        history.append({"role": "user", "content": prompt})
 
         for _turn in range(agent.max_turns):
             # Check for interruption at the start of each turn
@@ -87,7 +89,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             system_prompt = build_system_prompt(agent)
             messages: Any = [
                 {"role": "system", "content": system_prompt},
-                *agent.session.history,
+                *history,
             ]
 
             resp = _get_client().chat.completions.create(
@@ -123,7 +125,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
             if resp.usage:
                 assistant_message["prompt_tokens"] = resp.usage.prompt_tokens
                 assistant_message["completion_tokens"] = resp.usage.completion_tokens
-            agent.session.history.append(assistant_message)
+            history.append(assistant_message)
 
             if assistant_content:
                 yield assistant_content
@@ -140,7 +142,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                 fn = tc_any.function
                 fn_name = getattr(fn, "name", None)
                 if not isinstance(fn_name, str) or not agent.has_tool(fn_name):
-                    agent.session.history.append(
+                    history.append(
                         {
                             "role": "tool",
                             "tool_call_id": tc_any.id,
@@ -154,9 +156,7 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     arguments_any = json.loads(arguments_raw)
                 except (TypeError, json.JSONDecodeError) as e:
                     arguments_any = {}
-                    logger.error(
-                        f"Failed to parse arguments for {fn_name}: {e}"
-                    )
+                    logger.error(f"Failed to parse arguments for {fn_name}: {e}")
 
                 arguments = (
                     cast(dict[str, Any], arguments_any) if isinstance(arguments_any, dict) else {}
@@ -167,10 +167,9 @@ def run_agent_loop(prompt: str, agent: Agent) -> Generator[str, None, None]:
                     fn_name,
                     arguments,
                     reasoning_logger,
-                    agent.session,
                 )
 
-                agent.session.history.append(
+                history.append(
                     {
                         "role": "tool",
                         "tool_call_id": tc_any.id,

@@ -1,7 +1,5 @@
 """Configuration management for meto using Pydantic Settings."""
 
-import random
-from datetime import datetime
 from pathlib import Path
 
 from pydantic import Field, field_validator
@@ -100,13 +98,6 @@ class Settings(BaseSettings):
         default=Path.home() / ".minimeto" / "logs",
         description="Directory for agent reasoning trace logs.",
     )
-
-    @property
-    def log_file(self) -> Path:
-        """Generate actual log file path with timestamp and random suffix."""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
-        return self.LOG_DIR / f"agent_reasoning_{timestamp}_{random_suffix}.jsonl"
 
     @field_validator("LOG_DIR")
     @classmethod

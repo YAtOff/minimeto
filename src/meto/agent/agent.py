@@ -1,11 +1,8 @@
 """Agent object used by the CLI and agent loop.
 
 An Agent bundles:
-- a session (conversation history + todos)
 - an allowed tool set (OpenAI tool schemas)
 - a max turn budget for the tool-calling loop
-
-Main agents are stateful (shared session); subagents are isolated (fresh session).
 """
 
 from __future__ import annotations
@@ -13,7 +10,6 @@ from __future__ import annotations
 from typing import Any
 
 from meto.agent.exceptions import SubagentError
-from meto.agent.session import NullSessionLogger, Session
 from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
 
@@ -45,40 +41,33 @@ class Agent:
 
     name: str
     prompt: str
-    session: Session
     tools: list[dict[str, Any]]
     max_turns: int
 
     @classmethod
-    def main(cls, session: Session) -> Agent:
+    def main(cls) -> Agent:
         """Create the main (interactive) agent.
 
         The main agent:
-        - reuses the provided Session across prompts
         - has access to all tools
         """
         return cls(
             name="main",
             prompt="",
-            session=session,
             allowed_tools="*",
             max_turns=settings.MAIN_AGENT_MAX_TURNS,
         )
 
     @classmethod
-    def subagent(cls, name: str, parent_session: Session) -> Agent:
+    def subagent(cls, name: str) -> Agent:
         """Create an isolated subagent.
 
-        Subagents run with a fresh session (no shared history) and a stricter
+        Subagents run with a fresh context and a stricter
         tool allowlist defined by the agent registry.
 
         Args:
             name: Name of the agent to create
-            parent_session: Parent session
         """
-        del (
-            parent_session
-        )  # Subagents don't share session state, so ignore this argument for now. --- IGNORE ---
 
         all_agents = {}
         agent_config = all_agents.get(name)
@@ -89,9 +78,6 @@ class Agent:
             return cls(
                 name=name,
                 prompt=prompt,
-                session=Session(
-                    session_logger_cls=NullSessionLogger,
-                ),
                 allowed_tools=allowed_tools,
                 max_turns=settings.SUBAGENT_MAX_TURNS,
             )
@@ -100,7 +86,7 @@ class Agent:
         raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
     @classmethod
-    def fork(cls, allowed_tools: list[str] | str, parent_session: Session) -> Agent:
+    def fork(cls, allowed_tools: list[str] | str) -> Agent:
         """Create a generic subagent with an explicit tool allowlist.
 
         Used for custom commands that want to restrict tool access
@@ -108,16 +94,11 @@ class Agent:
 
         Args:
             allowed_tools: Tool allowlist for the forked agent
-            parent_session: Parent session
         """
-        del (
-            parent_session
-        )  # Subagents don't share session state, so ignore this argument for now. --- IGNORE ---
 
         return cls(
             name="fork",
             prompt="",
-            session=Session(session_logger_cls=NullSessionLogger),
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
         )
@@ -126,7 +107,6 @@ class Agent:
         self,
         name: str,
         prompt: str,
-        session: Session,
         allowed_tools: list[str] | str,
         max_turns: int,
     ) -> None:
@@ -135,13 +115,11 @@ class Agent:
         Args:
             name: Agent name (e.g. "main", "explore", "plan").
             prompt: Optional extra per-agent system prompt content.
-            session: Conversation session (history + todos).
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
         """
         self.name = name
         self.prompt = prompt
-        self.session = session
         self.max_turns = max_turns
 
         self.tools = get_tools_for_agent(allowed_tools)
