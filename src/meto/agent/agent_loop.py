@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from openai import OpenAI
 
+from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.reasoning_log import ReasoningLogger
 from meto.agent.system_prompt import build_system_prompt
@@ -49,9 +50,7 @@ def _get_client() -> OpenAI:
     return OpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_BASE_URL)
 
 
-def run_agent_loop(
-    agent: Agent, prompt: str, history: list[dict[str, Any]]
-) -> Generator[str, None, None]:
+def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str, None, None]:
     """Run the agent loop for a single user prompt.
 
     In interactive mode, this function is called repeatedly and shares
@@ -76,7 +75,7 @@ def run_agent_loop(
     reasoning_logger = ReasoningLogger(agent.name)
     try:
         reasoning_logger.log_user_input(prompt)
-        history.append({"role": "user", "content": prompt})
+        context.history.append({"role": "user", "content": prompt})
 
         for _turn in range(agent.max_turns):
             # Check for interruption at the start of each turn
@@ -89,7 +88,7 @@ def run_agent_loop(
             system_prompt = build_system_prompt(agent.prompt)
             messages: Any = [
                 {"role": "system", "content": system_prompt},
-                *history,
+                *context.history,
             ]
 
             resp = _get_client().chat.completions.create(
@@ -125,7 +124,7 @@ def run_agent_loop(
             if resp.usage:
                 assistant_message["prompt_tokens"] = resp.usage.prompt_tokens
                 assistant_message["completion_tokens"] = resp.usage.completion_tokens
-            history.append(assistant_message)
+            context.history.append(assistant_message)
 
             if assistant_content:
                 yield assistant_content
@@ -142,7 +141,7 @@ def run_agent_loop(
                 fn = tc_any.function
                 fn_name = getattr(fn, "name", None)
                 if not isinstance(fn_name, str) or not agent.has_tool(fn_name):
-                    history.append(
+                    context.history.append(
                         {
                             "role": "tool",
                             "tool_call_id": tc_any.id,
@@ -164,12 +163,13 @@ def run_agent_loop(
 
                 # Execute tool (logging happens inside the tool runner)
                 tool_output = run_tool(
+                    context,
                     fn_name,
                     arguments,
                     reasoning_logger,
                 )
 
-                history.append(
+                context.history.append(
                     {
                         "role": "tool",
                         "tool_call_id": tc_any.id,

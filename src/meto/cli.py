@@ -12,8 +12,10 @@ from prompt_toolkit.enums import EditingMode
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
 from meto.agent.command import execute_chat_command
+from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted
 from meto.agent.session import Session
+from meto.agent.todo import TodoManager
 
 app = typer.Typer(add_completion=False)
 
@@ -38,7 +40,8 @@ def _run_single_prompt(
 
     agent = Agent.main()
     history = session.history
-    for output in run_agent_loop(agent, user_input, history):
+    context = Context(todos=TodoManager(), history=history)
+    for output in run_agent_loop(agent, user_input, context):
         print(output, flush=True)
 
 

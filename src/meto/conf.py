@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     # --- Agent Features ---
 
     AGENT_FEATURES: list[str] = Field(
-        default=["agentsmd"],
+        default=["agentsmd", "todo_manager"],
         description="Enabled agent features: agentsmd, subagents, skills, todo_manager",
     )
 

@@ -17,7 +17,7 @@ import subprocess
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
 
+from meto.agent.context import Context
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
 
@@ -34,7 +35,9 @@ from meto.conf import settings
 # - This module must not import `meto.agent.loop` or `meto.cli`.
 
 
-def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bool = False) -> str:
+def _list_directory(
+    _context: Context, path: str = ".", recursive: bool = False, include_hidden: bool = False
+) -> str:
     """List directory contents with structured output."""
 
     try:
@@ -95,7 +98,7 @@ def _list_directory(path: str = ".", recursive: bool = False, include_hidden: bo
     return "\n".join(lines)
 
 
-def _read_file(path: str) -> str:
+def _read_file(_context: Context, path: str) -> str:
     """Read file contents with proper error handling."""
 
     try:
@@ -115,7 +118,7 @@ def _read_file(path: str) -> str:
         return f"Error reading file {path}: {ex}"
 
 
-def _write_file(path: str, content: str) -> str:
+def _write_file(_context: Context, path: str, content: str) -> str:
     """Write content to a file with proper error handling."""
 
     try:
@@ -131,7 +134,9 @@ def _write_file(path: str, content: str) -> str:
         return f"Error writing file {path}: {ex}"
 
 
-def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = False) -> str:
+def _run_grep_search(
+    _context: Context, pattern: str, path: str = ".", case_insensitive: bool = False
+) -> str:
     """Search for pattern in files using ripgrep (rg) with fallback to grep/Select-String."""
 
     if not pattern.strip():
@@ -192,7 +197,7 @@ def _run_grep_search(pattern: str, path: str = ".", case_insensitive: bool = Fal
     return run_shell(cmd)
 
 
-def _fetch(url: str, max_bytes: int = 100000) -> str:
+def _fetch(_context: Context, url: str, max_bytes: int = 100000) -> str:
     """Fetch URL via HTTP GET, return response body as text (truncated)."""
 
     parsed = urlparse(url)
@@ -212,7 +217,7 @@ def _fetch(url: str, max_bytes: int = 100000) -> str:
         return f"Error fetching {url}: {ex}"
 
 
-def _ask_user_question(question: str) -> str:
+def _ask_user_question(_context: Context, question: str) -> str:
     """Ask user a question using prompt_toolkit and return response."""
 
     session = PromptSession(editing_mode=EditingMode.EMACS)
@@ -227,56 +232,73 @@ def _ask_user_question(question: str) -> str:
         return f"(error getting user input: {ex})"
 
 
+def _manage_todos(context: Context, items: list[dict[str, Any]]) -> str:
+    """Update the todo list for a session."""
+
+    try:
+        result = context.todos.update(items)
+        context.todos.print_rich()
+        return result
+    except ValueError as e:
+        return f"Error: {e}"
+
+
 # Type alias for tool handler functions
-ToolHandler = Callable[[dict[str, Any]], str]
+ToolHandler = Callable[[Context, dict[str, Any]], str]
 
 
-def _handle_shell(parameters: dict[str, Any]) -> str:
+def _handle_shell(_context: Context, parameters: dict[str, Any]) -> str:
     """Handle shell command execution."""
     command = parameters.get("command", "")
     return run_shell(command)
 
 
-def _handle_list_dir(parameters: dict[str, Any]) -> str:
+def _handle_list_dir(context: Context, parameters: dict[str, Any]) -> str:
     """Handle directory listing."""
     path = parameters.get("path", ".")
     recursive = parameters.get("recursive", False)
     include_hidden = parameters.get("include_hidden", False)
-    return _list_directory(path, recursive, include_hidden)
+    return _list_directory(context, path, recursive, include_hidden)
 
 
-def _handle_read_file(parameters: dict[str, Any]) -> str:
+def _handle_read_file(context: Context, parameters: dict[str, Any]) -> str:
     """Handle file reading."""
     path = parameters.get("path", "")
-    return _read_file(path)
+    return _read_file(context, path)
 
 
-def _handle_write_file(parameters: dict[str, Any]) -> str:
+def _handle_write_file(context: Context, parameters: dict[str, Any]) -> str:
     """Handle file writing."""
     path = parameters.get("path", "")
     content = parameters.get("content", "")
-    return _write_file(path, content)
+    return _write_file(context, path, content)
 
 
-def _handle_grep_search(parameters: dict[str, Any]) -> str:
+def _handle_grep_search(context: Context, parameters: dict[str, Any]) -> str:
     """Handle pattern search."""
     pattern = parameters.get("pattern", "")
     path = parameters.get("path", ".")
     case_insensitive = parameters.get("case_insensitive", False)
-    return _run_grep_search(pattern, path, case_insensitive)
+    return _run_grep_search(context, pattern, path, case_insensitive)
 
 
-def _handle_fetch(parameters: dict[str, Any]) -> str:
+def _handle_fetch(context: Context, parameters: dict[str, Any]) -> str:
     """Handle URL fetching."""
     url = parameters.get("url", "")
     max_bytes = parameters.get("max_bytes", 100000)
-    return _fetch(url, max_bytes)
+    return _fetch(context, url, max_bytes)
 
 
-def _handle_ask_user_question(parameters: dict[str, Any]) -> str:
+def _handle_ask_user_question(context: Context, parameters: dict[str, Any]) -> str:
     """Handle user question prompting."""
     question = parameters.get("question", "")
-    return _ask_user_question(question)
+    return _ask_user_question(context, question)
+
+
+def _handle_manage_todos(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle user question prompting."""
+    items = parameters.get("items", [])
+    return _manage_todos(context, cast(list[dict[str, Any]], items))
 
 
 # Dispatch table mapping tool names to their handler functions
@@ -288,10 +310,12 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "grep_search": _handle_grep_search,
     "fetch": _handle_fetch,
     "ask_user_question": _handle_ask_user_question,
+    "manage_todos": _handle_manage_todos,
 }
 
 
 def run_tool(
+    context: Context,
     tool_name: str,
     parameters: dict[str, Any],
     logger: Any | None = None,
@@ -306,6 +330,7 @@ def run_tool(
           the conversation history as a tool message.
 
     Args:
+        context: Context object passed to tools that need it.
         tool_name: Name of the tool to execute.
         parameters: JSON-like tool arguments.
         logger: Optional reasoning logger for structured trace output.
@@ -320,7 +345,7 @@ def run_tool(
         tool_output = f"Error: Unknown tool: {tool_name}"
     else:
         try:
-            tool_output = handler(parameters)
+            tool_output = handler(context, parameters)
             if logger:
                 logger.log_tool_execution(tool_name, tool_output, error=False)
         except Exception as e:

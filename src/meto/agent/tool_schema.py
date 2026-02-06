@@ -195,6 +195,47 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "manage_todos",
+            "description": (
+                "Update the todo list. Use to plan and track progress on multi-step todos. "
+                "Mark todos in_progress before starting, completed when done. "
+                "Only ONE todo can be in_progress at a time."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "description": "Complete list of todos (replaces existing)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "content": {
+                                    "type": "string",
+                                    "description": "Todo description",
+                                },
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed"],
+                                    "description": "Todo status",
+                                },
+                                "activeForm": {
+                                    "type": "string",
+                                    "description": "Present tense action, e.g. 'Reading files'",
+                                },
+                            },
+                            "required": ["content", "status", "activeForm"],
+                        },
+                    }
+                },
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}
