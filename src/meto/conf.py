@@ -92,6 +92,13 @@ class Settings(BaseSettings):
         description="Directory for skill directories.",
     )
 
+    # --- Agent Features ---
+
+    AGENT_FEATURES: list[str] = Field(
+        default=["agentsmd"],
+        description="Enabled agent features: agentsmd, subagents, skills, todo_manager",
+    )
+
     # --- Logging ---
 
     LOG_DIR: Path = Field(

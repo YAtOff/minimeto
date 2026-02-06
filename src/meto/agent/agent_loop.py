@@ -86,7 +86,7 @@ def run_agent_loop(
 
             # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
             # Our history is intentionally JSON-shaped, so treat these as dynamic.
-            system_prompt = build_system_prompt(agent)
+            system_prompt = build_system_prompt(agent.prompt)
             messages: Any = [
                 {"role": "system", "content": system_prompt},
                 *history,

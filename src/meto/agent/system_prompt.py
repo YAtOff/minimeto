@@ -10,10 +10,8 @@ without restarting the CLI.
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from meto.agent.agent import Agent
+from meto.conf import settings
 
 # Base system prompt template.
 # The final system prompt used for each model call is built by appending
@@ -31,37 +29,95 @@ Rules:
 - Keep outputs succinct; summarize what you learned.
 """
 
+TODO_MANAGER_SECTION = """Manage multi-step tasks with todos:
+- Use manage_todos to track multi-step tasks (3+ steps)
+- Mark todos in_progress before starting, completed when done
+- Only ONE todo can be in_progress at a time
+"""
 
-def build_system_prompt(agent: "Agent | None" = None) -> str:
-    """Build the system prompt.
+SUBAGENTS_SECTION = """Subagent pattern (via run_task tool):
+- Use run_task for complex subtasks with isolated context
+- Subagents run with fresh history, keep main conversation clean
+{agent_list}
+"""
 
-    Appends project memory/user instructions from AGENTS.md in the current
-    working directory.
+SKILLS_SECTION = """Skills (via load_skill tool):
+- On-demand domain expertise for specialized tasks
+- Load skill content by name when needed
+{skill_list}
+"""
+
+
+class SystemPromptBuilder:
+    """Fluent builder for constructing system prompts."""
+
+    def __init__(self, features: list[str]) -> None:
+        self.features: set[str] = set(features)
+
+    def _is_enabled(self, feature: str) -> bool:
+        return feature in self.features
+
+    def render_agentsmd(self) -> str:
+        if self._is_enabled("agentsmd"):
+            agents_path = Path.cwd() / "AGENTS.md"
+            begin = "----- BEGIN AGENTS.md (project instructions) -----"
+            end = "----- END AGENTS.md -----"
+
+            try:
+                agents_text = agents_path.read_text(encoding="utf-8", errors="replace")
+            except FileNotFoundError:
+                agents_text = f"[AGENTS.md missing at: {agents_path}]"
+            except OSError as e:
+                agents_text = f"[AGENTS.md unreadable at: {agents_path} — {e}]"
+
+            return "\n".join([begin, agents_text.rstrip(), end])
+        return ""
+
+    def render_agent_prompt(self, agent_prompt: str) -> str:
+        if agent_prompt:
+            return "\n".join(
+                [
+                    "----- AGENT INSTRUCTIONS -----",
+                    agent_prompt,
+                    "----- END AGENT INSTRUCTIONS -----",
+                ]
+            )
+        return ""
+
+    def render_subagents(self) -> str:
+        if self._is_enabled("subagents"):
+            return SUBAGENTS_SECTION.format(agent_list="")
+        return ""
+
+    def render_skills(self) -> str:
+        if self._is_enabled("skills"):
+            return SKILLS_SECTION.format(skill_list="")
+        return ""
+
+    def render_todo_manager(self) -> str:
+        if self._is_enabled("todo_manager"):
+            return TODO_MANAGER_SECTION
+        return ""
+
+    def build(self, agent_prompt: str) -> str:
+        parts = [
+            SYSTEM_PROMPT.format(cwd=os.fspath(Path.cwd())).rstrip(),
+            self.render_subagents(),
+            self.render_skills(),
+            self.render_todo_manager(),
+            self.render_agent_prompt(agent_prompt),
+            self.render_agentsmd(),
+        ]
+
+        return "\n".join(filter(lambda x: bool(x), parts)) + "\n"
+
+
+def build_system_prompt(agent_prompt: "str" = "") -> str:
+    """Build the system prompt using builder pattern.
 
     Args:
-        agent: Optional agent for agent-specific prompt
+        agent_prompt: Optional agent-specific prompt
 
     Note: This intentionally does not cache; it re-reads AGENTS.md each call.
     """
-
-    cwd = Path.cwd()
-    prompt = SYSTEM_PROMPT.format(cwd=os.fspath(cwd))
-
-    # Allow agents to augment the prompt (e.g., planner agent instructions)
-    if agent and agent.prompt:
-        prompt += f"\n\n----- AGENT INSTRUCTIONS -----\n{agent.prompt}\n----- END AGENT INSTRUCTIONS -----"
-
-    agents_path = cwd / "AGENTS.md"
-    begin = "----- BEGIN AGENTS.md (project instructions) -----"
-    end = "----- END AGENTS.md -----"
-
-    try:
-        agents_text = agents_path.read_text(encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        agents_text = f"[AGENTS.md missing at: {agents_path}]"
-    except OSError as e:
-        agents_text = f"[AGENTS.md unreadable at: {agents_path} — {e}]"
-
-    # Always include the delimiter block so the model reliably knows where the
-    # project memory starts/ends.
-    return "\n".join([prompt.rstrip(), "", begin, agents_text.rstrip(), end, ""])
+    return SystemPromptBuilder(settings.AGENT_FEATURES).build(agent_prompt)
