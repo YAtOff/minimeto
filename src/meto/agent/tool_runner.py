@@ -24,7 +24,10 @@ from urllib.request import Request, urlopen
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
+from rich.console import Console
+from rich.panel import Panel
 
+from meto.agent.agent import Agent
 from meto.agent.context import Context
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
@@ -243,6 +246,58 @@ def _manage_todos(context: Context, items: list[dict[str, Any]]) -> str:
         return f"Error: {e}"
 
 
+def _execute_task(
+    context: Context,
+    prompt: str,
+    agent_name: str,
+    description: str | None = None,
+) -> str:
+    """Execute task in isolated subagent via direct `run_agent_loop` call."""
+
+    from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
+
+    console = Console()
+
+    # Build banner content
+    agent_line = f"[bold cyan]{agent_name}[/bold cyan]"
+    if description:
+        banner_content = f"{agent_line}\n[dim]{description}[/dim]"
+    else:
+        banner_content = agent_line
+
+    # Show start banner
+    console.print()
+    console.print(
+        Panel(
+            banner_content,
+            title="[dim]-> Starting subagent[/dim]",
+            border_style="magenta",
+            padding=(0, 1),
+        )
+    )
+
+    # Run subagent
+    try:
+        agent = Agent.subagent(agent_name)
+        output = "\n".join(run_agent_loop(agent, prompt, context.fork()))
+        result = truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
+    except Exception as ex:
+        result = f"(subagent error: {ex})"
+
+    # Show end banner
+    console.print(
+        Panel(
+            banner_content,
+            title="[dim]<- Subagent finished[/dim]",
+            border_style="magenta",
+            padding=(0, 1),
+        )
+    )
+    console.print()
+
+    return result
+
+
 # Type alias for tool handler functions
 ToolHandler = Callable[[Context, dict[str, Any]], str]
 
@@ -301,6 +356,14 @@ def _handle_manage_todos(context: Context, parameters: dict[str, Any]) -> str:
     return _manage_todos(context, cast(list[dict[str, Any]], items))
 
 
+def _handle_run_task(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle subagent task execution."""
+    description = cast(str, parameters.get("description", ""))
+    prompt = cast(str, parameters.get("prompt", ""))
+    agent_name = cast(str, parameters.get("agent_name", ""))
+    return _execute_task(context, prompt, agent_name, description)
+
+
 # Dispatch table mapping tool names to their handler functions
 _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "shell": _handle_shell,
@@ -311,6 +374,7 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "fetch": _handle_fetch,
     "ask_user_question": _handle_ask_user_question,
     "manage_todos": _handle_manage_todos,
+    "run_task": _handle_run_task,
 }
 
 

@@ -181,3 +181,32 @@ class ReasoningLogger:
             f"Loop completed after {self.turn_count} turns. Reason: {reason}",
         )
         self.console.print(f"[dim]Done: {reason}[/]")
+
+    def log_system_prompt(self, system_prompt: str) -> None:
+        """Log the system prompt with AGENTS.md content omitted.
+
+        Replaces the AGENTS.md section with a simple indicator to avoid
+        verbose output while showing the rest of the prompt.
+        """
+        begin_idx = system_prompt.find("BEGIN AGENTS.md")
+        end_idx = system_prompt.find("END AGENTS.md")
+
+        if begin_idx != -1 and end_idx != -1:
+            # Find line boundaries for cleaner truncation
+            begin_line_start = system_prompt.rfind("\n", 0, begin_idx) + 1
+            end_line_end = system_prompt.find("\n", end_idx)
+
+            if end_line_end == -1:
+                end_line_end = len(system_prompt)
+
+            truncated = (
+                system_prompt[:begin_line_start]
+                + "[AGENTS.md content omitted]\n"
+                + system_prompt[end_line_end + 1 :]
+            )
+        else:
+            truncated = system_prompt
+
+        self._log(logging.INFO, "System prompt logged")
+        self.console.print("[dim]System prompt:[/]")
+        self.console.print(f"[dim]{truncated}[/]")

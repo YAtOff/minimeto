@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from meto.agent.exceptions import SubagentError
+from meto.agent.loaders import get_agents
 from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
 
@@ -69,8 +70,8 @@ class Agent:
             name: Name of the agent to create
         """
 
-        all_agents = {}
-        agent_config = all_agents.get(name)
+        agents = get_agents()
+        agent_config = agents.get(name)
 
         if agent_config:
             prompt = agent_config["prompt"]
@@ -82,7 +83,7 @@ class Agent:
                 max_turns=settings.SUBAGENT_MAX_TURNS,
             )
 
-        available = ", ".join(sorted(all_agents.keys()))
+        available = ", ".join(sorted(agents.keys()))
         raise SubagentError(f"Unknown agent type '{name}'. Available agents: {available}")
 
     @classmethod

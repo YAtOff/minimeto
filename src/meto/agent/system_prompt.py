@@ -11,6 +11,7 @@ without restarting the CLI.
 import os
 from pathlib import Path
 
+from meto.agent.loaders import get_agents
 from meto.conf import settings
 
 # Base system prompt template.
@@ -27,6 +28,7 @@ Rules:
 - For searching file contents, use grep_search with regex patterns.
 - Make minimal changes. Don't over-engineer.
 - Keep outputs succinct; summarize what you learned.
+
 """
 
 TODO_MANAGER_SECTION = """Manage multi-step tasks with todos:
@@ -38,6 +40,7 @@ TODO_MANAGER_SECTION = """Manage multi-step tasks with todos:
 SUBAGENTS_SECTION = """Subagent pattern (via run_task tool):
 - Use run_task for complex subtasks with isolated context
 - Subagents run with fresh history, keep main conversation clean
+Available subagents (name: description):
 {agent_list}
 """
 
@@ -86,7 +89,10 @@ class SystemPromptBuilder:
 
     def render_subagents(self) -> str:
         if self._is_enabled("subagents"):
-            return SUBAGENTS_SECTION.format(agent_list="")
+            agent_list = "\n".join(
+                f"- {name}: {config['description']}" for name, config in get_agents().items()
+            )
+            return SUBAGENTS_SECTION.format(agent_list=agent_list)
         return ""
 
     def render_skills(self) -> str:

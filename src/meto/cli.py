@@ -73,6 +73,7 @@ def run(
     prompt: Annotated[
         str | None,
         typer.Option(
+            "-p",
             "--prompt",
             help="Prompt text (only valid with --one-shot mode, stdin takes precedence)",
         ),

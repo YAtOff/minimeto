@@ -236,6 +236,34 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_task",
+            "description": (
+                "Spawn subagent for isolated subtask. Each agent type has specific tools."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string",
+                        "description": "Short task name (3-5 words)",
+                    },
+                    "prompt": {
+                        "type": "string",
+                        "description": "Detailed instructions for subagent",
+                    },
+                    "agent_name": {
+                        "type": "string",
+                        "description": "Name of agent to spawn",
+                    },
+                },
+                "required": ["description", "prompt", "agent_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}

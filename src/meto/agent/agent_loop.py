@@ -74,6 +74,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
     reasoning_logger = ReasoningLogger(agent.name)
     try:
+        reasoning_logger.log_system_prompt(build_system_prompt(agent.prompt))
         reasoning_logger.log_user_input(prompt)
         context.history.append({"role": "user", "content": prompt})
 
