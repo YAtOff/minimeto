@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sys
 from typing import Annotated
 
@@ -14,10 +15,42 @@ from meto.agent.agent_loop import run_agent_loop
 from meto.agent.command import execute_chat_command
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted
+from meto.agent.loaders import get_agents
 from meto.agent.session import Session
 from meto.agent.todo import TodoManager
+from meto.conf import settings
 
 app = typer.Typer(add_completion=False)
+
+
+def _expand_at_agent_syntax(user_input: str) -> tuple[str, bool]:
+    """Expand @agent syntax to explicit run_task instructions.
+
+    Only expands if:
+    - subagents feature is enabled
+    - the agent exists
+
+    Returns:
+        (expanded_prompt, was_expanded)
+    """
+    if "subagents" not in settings.AGENT_FEATURES:
+        return user_input, False
+
+    pattern = r"@(\w+)\s+(.+)"
+    match = re.match(pattern, user_input.strip())
+    if not match:
+        return user_input, False
+
+    agent_name = match.group(1)
+    task = match.group(2)
+
+    # Check if agent exists
+    agents = get_agents()
+    if agent_name not in agents:
+        return user_input, False
+
+    expanded = f"Use run_task tool with agent_name='{agent_name}' to: {task}"
+    return expanded, True
 
 
 def _run_single_prompt(
@@ -30,6 +63,7 @@ def _run_single_prompt(
         user_input: Raw user input (may be a slash command or regular prompt)
         session: Session instance for conversation history
     """
+    # Handle slash commands
     if user_input.startswith("/"):
         success, output = execute_chat_command(user_input, session)
         if success:
@@ -38,10 +72,13 @@ def _run_single_prompt(
             return
         # Unknown command falls through to agent
 
+    # Normal prompt flow
+    # Try @agent syntax expansion first
+    expanded_input, _ = _expand_at_agent_syntax(user_input)
     agent = Agent.main()
     history = session.history
     context = Context(todos=TodoManager(), history=history)
-    for output in run_agent_loop(agent, user_input, context):
+    for output in run_agent_loop(agent, expanded_input, context):
         print(output, flush=True)
 
 
