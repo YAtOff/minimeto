@@ -25,6 +25,7 @@ from openai import OpenAI
 
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
+from meto.agent.hooks import post_tool_use, pre_tool_use
 from meto.agent.reasoning_log import ReasoningLogger
 from meto.agent.system_prompt import build_system_prompt
 from meto.agent.tool_runner import run_tool  # pyright: ignore[reportImportCycles]
@@ -162,6 +163,19 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                     cast(dict[str, Any], arguments_any) if isinstance(arguments_any, dict) else {}
                 )
 
+                # Check pre-execution hooks
+                pre_tool_hook_result = pre_tool_use(fn_name, arguments)
+                if not pre_tool_hook_result.success:
+                    context.history.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc_any.id,
+                            "content": pre_tool_hook_result.error
+                            or "Action blocked by security policy",
+                        }
+                    )
+                    continue
+
                 # Execute tool (logging happens inside the tool runner)
                 tool_output = run_tool(
                     context,
@@ -169,6 +183,13 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                     arguments,
                     reasoning_logger,
                 )
+
+                # Check post-execution hooks
+                post_tool_hook_result = post_tool_use(fn_name, tool_output)
+                if not post_tool_hook_result.success:
+                    tool_output += (
+                        f"\n\n[System] Post-action check failed: {post_tool_hook_result.error}"
+                    )
 
                 context.history.append(
                     {
