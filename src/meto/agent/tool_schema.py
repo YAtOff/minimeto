@@ -264,6 +264,28 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_skill",
+            "description": (
+                "Load domain expertise for specialized tasks. "
+                "Use when you need domain-specific knowledge not in your base knowledge. "
+                "Available skills are listed in the system prompt."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "skill_name": {
+                        "type": "string",
+                        "description": "Name of skill to load (e.g., 'code-review', 'commit-message')",
+                    }
+                },
+                "required": ["skill_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}

@@ -134,14 +134,15 @@ class ReasoningLogger:
 
         # Log token usage if available
         if hasattr(response, "usage"):
+            usage = response.usage
             self._log(
                 logging.INFO,
-                f"Token usage - Input: {response.usage.prompt_tokens}, "
-                f"Output: {response.usage.completion_tokens}",
+                f"Token usage - Input: {usage.prompt_tokens}({usage.prompt_tokens_details.cached_tokens}), "
+                f"Output: {usage.completion_tokens}",
             )
             # Also print to console for user visibility
             self.console.print(
-                f"[dim]🪙 {response.usage.prompt_tokens} ↗️, {response.usage.completion_tokens} ↘️[/]"
+                f"[dim]🪙 {usage.prompt_tokens}({usage.prompt_tokens_details.cached_tokens}) ↗️, {usage.completion_tokens} ↘️[/]"
             )
 
     def log_tool_selection(self, tool_name: str, arguments: dict[str, Any]) -> None:

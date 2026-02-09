@@ -11,7 +11,7 @@ without restarting the CLI.
 import os
 from pathlib import Path
 
-from meto.agent.loaders import get_agents
+from meto.agent.loaders import get_agents, get_skill_loader
 from meto.conf import settings
 
 # Base system prompt template.
@@ -40,14 +40,13 @@ TODO_MANAGER_SECTION = """Manage multi-step tasks with todos:
 SUBAGENTS_SECTION = """Subagent pattern (via run_task tool):
 - Use run_task for complex subtasks with isolated context
 - Subagents run with fresh history, keep main conversation clean
-Available subagents (name: description):
-{agent_list}
+{agents_list}
 """
 
 SKILLS_SECTION = """Skills (via load_skill tool):
 - On-demand domain expertise for specialized tasks
 - Load skill content by name when needed
-{skill_list}
+{skills_list}
 """
 
 
@@ -89,15 +88,26 @@ class SystemPromptBuilder:
 
     def render_subagents(self) -> str:
         if self._is_enabled("subagents"):
-            agent_list = "\n".join(
-                f"- {name}: {config['description']}" for name, config in get_agents().items()
-            )
-            return SUBAGENTS_SECTION.format(agent_list=agent_list)
+            agents = get_agents()
+            if agents:
+                agent_lines = [
+                    f"- {name}: {config['description']}" for name, config in agents.items()
+                ]
+                agents_list = "Available subagents:\n" + "\n".join(agent_lines)
+            else:
+                agents_list = "Available subagents: (none)"
+            return SUBAGENTS_SECTION.format(agents_list=agents_list)
         return ""
 
     def render_skills(self) -> str:
         if self._is_enabled("skills"):
-            return SKILLS_SECTION.format(skill_list="")
+            skills = get_skill_loader().get_skill_descriptions()
+            if skills:
+                skill_lines = [f"- {name}: {desc}" for name, desc in sorted(skills.items())]
+                skills_list = "Available skills:\n" + "\n".join(skill_lines)
+            else:
+                skills_list = "Available skills: (none)"
+            return SKILLS_SECTION.format(skills_list=skills_list)
         return ""
 
     def render_todo_manager(self) -> str:

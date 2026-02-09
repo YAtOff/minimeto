@@ -29,6 +29,7 @@ from rich.panel import Panel
 
 from meto.agent.agent import Agent
 from meto.agent.context import Context
+from meto.agent.loaders import get_skill_loader
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
 
@@ -298,6 +299,17 @@ def _execute_task(
     return result
 
 
+def _load_skill(_context: Context, skill_name: str) -> str:
+    """Load skill content and return it."""
+    try:
+        skill_loader = get_skill_loader()
+        return skill_loader.get_skill_content(skill_name)
+    except ValueError as e:
+        return f"Error: {e}"
+    except OSError as ex:
+        return f"Error: Failed to load skill '{skill_name}': {ex}"
+
+
 # Type alias for tool handler functions
 ToolHandler = Callable[[Context, dict[str, Any]], str]
 
@@ -364,6 +376,12 @@ def _handle_run_task(context: Context, parameters: dict[str, Any]) -> str:
     return _execute_task(context, prompt, agent_name, description)
 
 
+def _handle_load_skill(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle skill loading."""
+    skill_name = parameters.get("skill_name", "")
+    return _load_skill(context, skill_name)
+
+
 # Dispatch table mapping tool names to their handler functions
 _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "shell": _handle_shell,
@@ -375,6 +393,7 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "ask_user_question": _handle_ask_user_question,
     "manage_todos": _handle_manage_todos,
     "run_task": _handle_run_task,
+    "load_skill": _handle_load_skill,
 }
 
 
