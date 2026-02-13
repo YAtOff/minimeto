@@ -43,13 +43,35 @@ This is a minimal coding agent that achieves power through simplicity: an LLM wi
 - **[agent/syntax_expander.py](src/meto/agent/syntax_expander.py)** - Shorthand syntax expansion (@agent, ~skill)
 - **[agent/todo.py](src/meto/agent/todo.py)** - Todo manager for multi-step task tracking
 - **[agent/command.py](src/meto/agent/command.py)** - Slash command handlers (/exit, /help, /history, etc.)
+- **[agent/permissions.py](src/meto/agent/permissions.py)** - Session-scoped permission manager for sensitive operations
+- **[agent/hooks/](src/meto/agent/hooks/)** - Pre/post-tool hooks for security and permissions
 
 ### Agent Loop Flow
 
 1. User prompt → syntax expansion (if applicable)
 2. LLM call with system prompt + history + available tools
-3. If tool calls: execute tools, append results to history, loop back to step 2
+3. If tool calls: **run pre-tool hooks** (permissions, security) → execute tools → append results to history → loop back to step 2
 4. If no tool calls: return final response
+
+### Permission System
+
+**Hooks** provide a clean way to intercept tool calls before execution:
+- **`SafeReadHook`**: Blocks reading sensitive files (e.g., `.env`)
+- **`FilePermissionHook`**: Asks permission before accessing files outside CWD
+- **`ShellPermissionHook`**: Asks permission before executing shell commands
+- **`FetchPermissionHook`**: Asks permission before fetching web resources
+
+**Permission Prompts**: When a hook requires permission, the user sees:
+```
+[Permission Required] Execute shell command: ls -la
+(yes/no/always):
+```
+
+- **yes**: Allow this one operation
+- **no**: Deny this operation
+- **always**: Allow all similar operations this session (cached in memory)
+
+**Global Bypass**: Set `METO_PERMISSIONS_ENABLED=false` to disable all permission checks.
 
 ### Syntax Shorthands
 
@@ -118,6 +140,9 @@ METO_SKILLS_DIR=.meto/skills
 
 # Features (comma-separated)
 METO_AGENT_FEATURES=agentsmd,todo_manager,subagents,skills
+
+# Security
+METO_PERMISSIONS_ENABLED=true  # Enable permission checks for sensitive operations
 ```
 
 ## Linting

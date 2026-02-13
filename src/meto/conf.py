@@ -99,6 +99,13 @@ class Settings(BaseSettings):
         description="Enabled agent features: agentsmd, subagents, skills, todo_manager",
     )
 
+    # --- Security ---
+
+    PERMISSIONS_ENABLED: bool = Field(
+        default=True,
+        description="Enable permission checks for sensitive operations (shell, fetch, file access outside CWD).",
+    )
+
     # --- Logging ---
 
     LOG_DIR: Path = Field(

@@ -29,7 +29,12 @@ class PreToolUseHook(ABC):
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        PreToolUseHook.registry.append(cls)
+        # Skip abstract intermediary classes (those that introduce new abstract methods)
+        has_new_abstract = any(
+            getattr(v, "__isabstractmethod__", False) for v in cls.__dict__.values()
+        )
+        if not has_new_abstract:
+            PreToolUseHook.registry.append(cls)
 
     def matches(self) -> bool:
         """Default matcher checks against matched_tools if defined."""

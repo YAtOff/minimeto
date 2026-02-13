@@ -40,4 +40,9 @@ def post_tool_use(tool_name: str, output: str) -> HookResult:
 
 
 # New hooks can be added to this list to be imported and registered
+from .permissions import (  # noqa: F401
+    FetchPermissionHook,
+    FilePermissionHook,
+    ShellPermissionHook,
+)
 from .security import SafeReadHook  # noqa: F401
