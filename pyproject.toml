@@ -57,6 +57,7 @@ dev = [
     "ruff>=0.14.11",
     "codespell>=2.4.1",
     "rich>=14.2.0",
+    "nodejs-wheel-binaries~=22.0",
     "basedpyright>=1.37.1",
     "funlog>=0.2.1",
     "ipdb>=0.13.13",
