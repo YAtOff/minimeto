@@ -192,3 +192,4 @@ cython_debug/
 .plans/
 .ralph/
 .prompts/
+.meto/mcp.json

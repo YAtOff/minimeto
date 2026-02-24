@@ -176,10 +176,9 @@ class SkillLoader:
             # Build full content with resource hints
             full_content = body
             if resources:
-                full_content += "\n\n## Available Resources\n"
-                full_content += "Additional files in this skill directory:\n"
+                full_content += f"\n\n## Available Resources\nSkill directory: `{skill_dir}`\nAdditional files:\n"
                 for resource in resources:
-                    full_content += f"- {resource}\n"
+                    full_content += f"- `{skill_dir / resource}`\n"
 
             # Cache for future calls
             self._content_cache[skill_name] = full_content
