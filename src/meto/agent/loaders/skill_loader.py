@@ -169,14 +169,25 @@ class SkillLoader:
             # Check for additional resources in skill directory
             skill_dir = skill_path.parent
             resources = []
-            for item in sorted(skill_dir.iterdir()):
-                if item.name != "SKILL.md":
-                    resources.append(item.name)
+            for item in sorted(skill_dir.rglob("*")):
+                if item.is_file() and item.name != "SKILL.md":
+                    resources.append(str(item.relative_to(skill_dir)))
 
             # Build full content with resource hints
             full_content = body
             if resources:
-                full_content += f"\n\n## Available Resources\nSkill directory: `{skill_dir}`\nAdditional files:\n"
+                full_content += "\n".join(
+                    (
+                        "",
+                        "## Additional Resources",
+                        f"Base directory for this skill: `{skill_dir}`",
+                        "This skill includes additional files in the same directory:",
+                        "Relative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.",
+                        "Note: file list is sampled.",
+                        "Additional files:",
+                        "",
+                    )
+                )
                 for resource in resources:
                     full_content += f"- `{skill_dir / resource}`\n"
 
