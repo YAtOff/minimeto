@@ -39,6 +39,50 @@ class ToolRegistry:
             handler=handler,
         )
 
+    def register_from_mcp(
+        self,
+        tools: list[Any],
+        call_tool: Callable[[str, dict[str, Any]], str],
+    ) -> None:
+        """Register MCP tools in the runtime catalog.
+
+        The provided ``tools`` are expected to expose ``name``, ``description``,
+        and ``inputSchema`` attributes (as returned by FastMCP client APIs).
+        """
+        for tool in tools:
+            name = str(getattr(tool, "name", "")).strip()
+            if not name:
+                continue
+
+            description = str(getattr(tool, "description", "") or "")
+            input_schema = getattr(tool, "inputSchema", None)
+            if not isinstance(input_schema, dict):
+                input_schema = {"type": "object", "properties": {}}
+
+            schema = {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": input_schema,
+                },
+            }
+
+            def _mcp_handler(
+                _context: Any,
+                parameters: dict[str, Any],
+                *,
+                _tool_name: str = name,
+            ) -> str:
+                return call_tool(_tool_name, parameters)
+
+            self.register_tool(
+                name=name,
+                schema=schema,
+                handler=_mcp_handler,
+                description=description,
+            )
+
     def search(self, query: str, top_k: int = 3) -> list[ToolRegistration]:
         if not query.strip():
             return []

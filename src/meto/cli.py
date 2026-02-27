@@ -14,9 +14,11 @@ from meto.agent.agent_loop import run_agent_loop
 from meto.agent.command import execute_chat_command
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted
+from meto.agent.mcp_client import initialize_mcp_registry
 from meto.agent.session import Session
 from meto.agent.syntax_expander import SyntaxExpander
 from meto.agent.todo import TodoManager
+from meto.agent.tool_registry import registry
 from meto.conf import settings
 
 app = typer.Typer(add_completion=False)
@@ -42,6 +44,11 @@ def _run_single_prompt(
         # Unknown command falls through to agent
 
     # Normal prompt flow
+    if "mcp" in settings.AGENT_FEATURES:
+        warning = initialize_mcp_registry(registry)
+        if warning:
+            print(f"[mcp] {warning}", flush=True)
+
     # Try syntax expansions (@agent, ~skill, etc.)
     expander = SyntaxExpander(settings.AGENT_FEATURES)
     expanded_input, _ = expander.expand(user_input)

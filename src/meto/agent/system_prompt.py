@@ -26,6 +26,7 @@ Rules:
 - Never invent file paths. Use list_dir first if unsure.
 - When you need file context, read it using read_file.
 - For searching file contents, use grep_search with regex patterns.
+- When you need a tool you don't have, use search_available_tools first.
 - Make minimal changes. Don't over-engineer.
 - Keep outputs succinct; summarize what you learned.
 
