@@ -239,6 +239,35 @@ TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "search_available_tools",
+            "description": (
+                "Searches the tool library for useful tools. "
+                "Use this when you don't have a tool for a specific task. "
+                "Returns a list of 'ToolName: Description'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": (
+                            "Keywords or natural language description of the task "
+                            "(e.g., 'git operations', 'deployment')."
+                        ),
+                    },
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Max number of tools to return (default: 3).",
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "run_task",
             "description": (
                 "Spawn subagent for isolated subtask. Each agent type has specific tools."

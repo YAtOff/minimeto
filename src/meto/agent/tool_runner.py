@@ -28,9 +28,10 @@ from rich.console import Console
 from rich.panel import Panel
 
 from meto.agent.agent import Agent
-from meto.agent.context import Context
+from meto.agent.context import Context, PendingTool
 from meto.agent.loaders import get_skill_loader
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
+from meto.agent.tool_registry import registry
 from meto.conf import settings
 
 # Tool runtime / execution.
@@ -310,6 +311,27 @@ def _load_skill(_context: Context, skill_name: str) -> str:
         return f"Error: Failed to load skill '{skill_name}': {ex}"
 
 
+def _search_available_tools(context: Context, query: str, top_k: int = 3) -> str:
+    """Search registry tools and stage selected tools for next loop turn."""
+    results = registry.search(query, top_k=top_k)
+    if not results:
+        return "No matching tools found."
+
+    pending_names = {
+        pending_tool.schema.get("function", {}).get("name")
+        for pending_tool in context.pending_tools
+    }
+
+    lines: list[str] = []
+    for tool in results:
+        if tool.name not in pending_names:
+            context.pending_tools.append(PendingTool(schema=tool.schema, handler=tool.handler))
+            pending_names.add(tool.name)
+        lines.append(f"{tool.name}: {tool.description}")
+
+    return "\n".join(lines)
+
+
 # Type alias for tool handler functions
 ToolHandler = Callable[[Context, dict[str, Any]], str]
 
@@ -382,6 +404,18 @@ def _handle_load_skill(context: Context, parameters: dict[str, Any]) -> str:
     return _load_skill(context, skill_name)
 
 
+def _handle_search_available_tools(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle runtime tool discovery."""
+    query = cast(str, parameters.get("query", ""))
+    top_k = cast(int, parameters.get("top_k", 3))
+    return _search_available_tools(context, query, top_k)
+
+
+def register_tool_handler(tool_name: str, handler: ToolHandler) -> None:
+    """Register or replace a runtime tool handler."""
+    _TOOL_HANDLERS[tool_name] = handler
+
+
 # Dispatch table mapping tool names to their handler functions
 _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "shell": _handle_shell,
@@ -392,6 +426,7 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "fetch": _handle_fetch,
     "ask_user_question": _handle_ask_user_question,
     "manage_todos": _handle_manage_todos,
+    "search_available_tools": _handle_search_available_tools,
     "run_task": _handle_run_task,
     "load_skill": _handle_load_skill,
 }

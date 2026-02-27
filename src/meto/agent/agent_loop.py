@@ -28,7 +28,10 @@ from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.hooks import post_tool_use, pre_tool_use
 from meto.agent.reasoning_log import ReasoningLogger
 from meto.agent.system_prompt import build_system_prompt
-from meto.agent.tool_runner import run_tool  # pyright: ignore[reportImportCycles]
+from meto.agent.tool_runner import (  # pyright: ignore[reportImportCycles]
+    register_tool_handler,
+    run_tool,
+)
 from meto.conf import settings
 
 if TYPE_CHECKING:
@@ -198,6 +201,22 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         "content": tool_output,
                     }
                 )
+
+                if context.pending_tools:
+                    existing_tool_names = set(agent.tool_names)
+                    for pending_tool in context.pending_tools:
+                        function_block = pending_tool.schema.get("function", {})
+                        schema_name = function_block.get("name")
+                        if not isinstance(schema_name, str):
+                            continue
+
+                        if schema_name not in existing_tool_names:
+                            agent.tools.append(pending_tool.schema)
+                            existing_tool_names.add(schema_name)
+
+                        register_tool_handler(schema_name, pending_tool.handler)
+
+                    context.pending_tools.clear()
 
         reasoning_logger.log_loop_completion(f"Reached max turns ({agent.max_turns})")
         raise MaxStepsExceededError(f"Exceeded maximum of {agent.max_turns} turns")
