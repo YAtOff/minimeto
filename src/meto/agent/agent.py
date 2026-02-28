@@ -11,6 +11,7 @@ from typing import Any
 
 from meto.agent.exceptions import SubagentError
 from meto.agent.loaders import get_agents
+from meto.agent.tool_registry import registry
 from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
 
@@ -27,8 +28,20 @@ def get_tools_for_agent(allowed_tools: list[str] | str) -> list[dict[str, Any]]:
     if allowed_tools == "*":
         return TOOLS
 
-    allowed_set = set(allowed_tools)
-    return [tool for tool in TOOLS if tool["function"]["name"] in allowed_set]
+    static_tools = {tool["function"]["name"]: tool for tool in TOOLS}
+    resolved: list[dict[str, Any]] = []
+
+    for tool_name in allowed_tools:
+        static_tool = static_tools.get(tool_name)
+        if static_tool is not None:
+            resolved.append(static_tool)
+            continue
+
+        registration = registry.catalog.get(tool_name)
+        if registration is not None:
+            resolved.append(registration.schema)
+
+    return resolved
 
 
 class Agent:

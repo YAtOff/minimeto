@@ -28,6 +28,7 @@ from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.hooks import post_tool_use, pre_tool_use
 from meto.agent.reasoning_log import ReasoningLogger
 from meto.agent.system_prompt import build_system_prompt
+from meto.agent.tool_registry import registry
 from meto.agent.tool_runner import (  # pyright: ignore[reportImportCycles]
     register_tool_handler,
     run_tool,
@@ -66,6 +67,12 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
     if not prompt.strip():
         return
+
+    for tool_name in agent.tool_names:
+        registration = registry.catalog.get(tool_name)
+        if registration is None:
+            continue
+        register_tool_handler(registration.name, registration.handler)
 
     # Set up signal handler for graceful Ctrl-C interruption
     interrupted = False

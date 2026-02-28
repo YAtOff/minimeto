@@ -12,10 +12,11 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from meto.agent.exceptions import ToolNotFoundError
 from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
+from meto.agent.tool_registry import registry
 from meto.agent.tool_schema import TOOLS, TOOLS_BY_NAME
 from meto.conf import settings
 
@@ -38,16 +39,47 @@ def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]
         ToolNotFoundError: If a named tool is not defined in the tool schema.
     """
     if requested_tools == "*":
-        return TOOLS
+        merged: list[dict[str, Any]] = []
+        seen_names: set[str] = set()
+
+        for tool in TOOLS:
+            tool_name = cast(str, tool["function"]["name"])
+            if tool_name in seen_names:
+                continue
+            merged.append(tool)
+            seen_names.add(tool_name)
+
+        for registration in registry.catalog.values():
+            if registration.name in seen_names:
+                continue
+            merged.append(registration.schema)
+            seen_names.add(registration.name)
+
+        return merged
 
     tools_by_name = TOOLS_BY_NAME
-    unknown = [name for name in requested_tools if name not in tools_by_name]
+    unknown = [
+        name
+        for name in requested_tools
+        if name not in tools_by_name and name not in registry.catalog
+    ]
     if unknown:
-        known = ", ".join(sorted(tools_by_name))
+        known = ", ".join(sorted({*tools_by_name.keys(), *registry.catalog.keys()}))
         missing = ", ".join(unknown)
         raise ToolNotFoundError(f"Unknown tool(s): {missing}. Known tools: {known}")
 
-    return [tools_by_name[name] for name in requested_tools]
+    resolved: list[dict[str, Any]] = []
+    for name in requested_tools:
+        tool = tools_by_name.get(name)
+        if tool is not None:
+            resolved.append(tool)
+            continue
+
+        registration = registry.catalog.get(name)
+        if registration is not None:
+            resolved.append(registration.schema)
+
+    return resolved
 
 
 def validate_agent_config(config: dict[str, Any]) -> list[str]:
@@ -78,7 +110,7 @@ def validate_agent_config(config: dict[str, Any]) -> list[str]:
             if not tools:
                 errors.append("'tools' list cannot be empty")
             for tool in tools:
-                if tool not in TOOLS_BY_NAME:
+                if tool not in TOOLS_BY_NAME and tool not in registry.catalog:
                     errors.append(f"Unknown tool '{tool}' in tools list")
         else:
             errors.append("'tools' must be a list or '*'")
