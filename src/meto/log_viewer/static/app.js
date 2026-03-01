@@ -5,6 +5,7 @@ let logFiles = [];
 let currentFile = null;
 let currentData = null;
 let searchQuery = '';
+let errorOnly = false;
 
 // DOM Elements
 const logList = document.getElementById('log-list');
@@ -12,17 +13,29 @@ const logContent = document.getElementById('log-content');
 const searchContainer = document.getElementById('search-container');
 const searchInput = document.getElementById('search-input');
 const searchCount = document.getElementById('search-count');
+const errorOnlyCheckbox = document.getElementById('error-only');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadLogFiles();
     setupSearch();
+    setupErrorFilter();
 });
 
 // Setup search functionality
 function setupSearch() {
     searchInput.addEventListener('input', (e) => {
         searchQuery = e.target.value.trim().toLowerCase();
+        if (currentData) {
+            renderLogContent(currentData);
+        }
+    });
+}
+
+// Setup error-only filter
+function setupErrorFilter() {
+    errorOnlyCheckbox.addEventListener('change', (e) => {
+        errorOnly = e.target.checked;
         if (currentData) {
             renderLogContent(currentData);
         }
@@ -85,10 +98,17 @@ async function selectFile(filename) {
 function renderLogContent(data) {
     const { entries, total_tokens, tokens_per_turn } = data;
 
-    // Filter entries if search query exists
+    // Filter entries
     let filteredEntries = entries;
+
+    // Apply error-only filter
+    if (errorOnly) {
+        filteredEntries = filteredEntries.filter(entry => entry.level === 'ERROR');
+    }
+
+    // Apply search filter
     if (searchQuery) {
-        filteredEntries = entries.filter(entry =>
+        filteredEntries = filteredEntries.filter(entry =>
             entry.message.toLowerCase().includes(searchQuery) ||
             entry.agent_name.toLowerCase().includes(searchQuery) ||
             (entry.turn !== null && entry.turn.toString().includes(searchQuery))
@@ -96,7 +116,7 @@ function renderLogContent(data) {
     }
 
     // Update search count
-    if (searchQuery) {
+    if (searchQuery || errorOnly) {
         searchCount.textContent = `${filteredEntries.length} of ${entries.length} entries`;
     } else {
         searchCount.textContent = '';
@@ -123,8 +143,8 @@ function renderLogContent(data) {
         <div class="timeline">
     `;
 
-    if (filteredEntries.length === 0 && searchQuery) {
-        html += '<div class="no-results">No entries match your search</div>';
+    if (filteredEntries.length === 0 && (searchQuery || errorOnly)) {
+        html += '<div class="no-results">No entries match your filters</div>';
     } else {
         // Render each turn as a timeline item
         for (const [turnNum, turnEntries] of turns) {
@@ -207,13 +227,14 @@ function renderTurn(turnNum, entries, turnTokens) {
     if (classified.toolResults.length > 0) {
         for (const entry of classified.toolResults) {
             const isError = entry.level === 'ERROR';
-            html += renderEntryWithType(entry, isError ? 'error' : 'result', isError ? '✗' : '✓');
+            html += renderEntryWithType(entry, isError ? 'error' : 'result', isError ? '❌' : '✓');
         }
     }
 
     if (classified.other.length > 0) {
         for (const entry of classified.other) {
-            html += renderEntryWithType(entry, entry.level.toLowerCase(), '•');
+            const icon = entry.level === 'ERROR' ? '❌' : '•';
+            html += renderEntryWithType(entry, entry.level.toLowerCase(), icon);
         }
     }
 
@@ -244,8 +265,11 @@ function renderEntryWithType(entry, type, icon) {
         ? highlightText(escapeHtml(entry.message), searchQuery)
         : escapeHtml(entry.message);
 
+    // Add error class for error entries
+    const errorClass = entry.level === 'ERROR' ? 'entry-error' : '';
+
     return `
-        <div class="entry ${levelClass} entry-${type}">
+        <div class="entry ${levelClass} entry-${type} ${errorClass}">
             <div class="entry-header">
                 <span class="entry-icon">${icon}</span>
                 <span class="timestamp">${formatTimestamp(entry.timestamp)}</span>

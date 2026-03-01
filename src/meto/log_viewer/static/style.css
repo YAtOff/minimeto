@@ -100,6 +100,7 @@ main {
     gap: 1rem;
     align-items: center;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
 }
 
 #search-container.hidden {
@@ -129,6 +130,25 @@ main {
 #search-count {
     font-size: 0.8rem;
     color: #64748b;
+}
+
+/* Error Filter */
+.error-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #ef4444;
+    user-select: none;
+}
+
+.error-filter input[type="checkbox"] {
+    accent-color: #ef4444;
+}
+
+.error-icon {
+    font-size: 1rem;
 }
 
 /* Text Highlighting */
@@ -248,13 +268,21 @@ mark {
     border-left-color: #3b82f6;
 }
 
-.entry.error {
-    border-left-color: #ef4444;
-    background: #1f1315;
-}
-
 .entry.debug {
     border-left-color: #6b7280;
+}
+
+/* Error entries - prominent styling */
+.entry.error {
+    border-left-color: #ef4444;
+    background: linear-gradient(90deg, #2a1515 0%, #1f1315 100%);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
+}
+
+.entry.entry-error {
+    border-left-color: #ef4444;
+    background: linear-gradient(90deg, #2a1515 0%, #1f1315 100%);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
 }
 
 /* Entry type variations */
@@ -276,11 +304,6 @@ mark {
 .entry.entry-result {
     border-left-color: #22c55e;
     background: #0a1f12;
-}
-
-.entry.entry-error {
-    border-left-color: #ef4444;
-    background: #1f1315;
 }
 
 /* Entry header with icon */
