@@ -36,6 +36,10 @@ This is a minimal coding agent that achieves power through simplicity: an LLM wi
 - **[agent/agent_loop.py](src/meto/agent/agent_loop.py)** - The heart: tool-calling loop that executes LLM responses
 - **[agent/agent.py](src/meto/agent/agent.py)** - Agent factory creating main agents and subagents with different tool permissions
 - **[agent/tool_runner.py](src/meto/agent/tool_runner.py)** - Tool implementations (shell, read, write, edit, grep, web_fetch, etc.)
+- **[agent/tool_registry.py](src/meto/agent/tool_registry.py)** - Runtime tool discovery registry with keyword search
+- **[agent/mcp_client.py](src/meto/agent/mcp_client.py)** - FastMCP client integration for external tool discovery
+- **[agent/reasoning_log.py](src/meto/agent/reasoning_log.py)** - Structured logging (JSONL trace files + rich stderr)
+- **[agent/shell.py](src/meto/agent/shell.py)** - Shell execution utilities (prefers zsh > bash > PowerShell)
 - **[agent/tool_schema.py](src/meto/agent/tool_schema.py)** - OpenAI-compatible tool schemas
 - **[agent/session.py](src/meto/agent/session.py)** - Conversation history and state management
 - **[agent/context.py](src/meto/agent/context.py)** - Context object passed to tools (todos, history)
@@ -43,13 +47,36 @@ This is a minimal coding agent that achieves power through simplicity: an LLM wi
 - **[agent/syntax_expander.py](src/meto/agent/syntax_expander.py)** - Shorthand syntax expansion (@agent, ~skill)
 - **[agent/todo.py](src/meto/agent/todo.py)** - Todo manager for multi-step task tracking
 - **[agent/command.py](src/meto/agent/command.py)** - Slash command handlers (/exit, /help, /history, etc.)
+- **[agent/permissions.py](src/meto/agent/permissions.py)** - Session-scoped permission manager for sensitive operations
+- **[agent/hooks/](src/meto/agent/hooks/)** - Pre/post-tool hooks for security and permissions
 
 ### Agent Loop Flow
 
 1. User prompt → syntax expansion (if applicable)
-2. LLM call with system prompt + history + available tools
-3. If tool calls: execute tools, append results to history, loop back to step 2
-4. If no tool calls: return final response
+2. Initialize MCP tools from `.meto/mcp.json` (if configured)
+3. LLM call with system prompt + history + available tools
+4. If tool calls: **run pre-tool hooks** (permissions, security) → execute tools → append results to history → loop back to step 3
+5. If no tool calls: return final response
+
+### Permission System
+
+**Hooks** provide a clean way to intercept tool calls before execution:
+- **`SafeReadHook`**: Blocks reading sensitive files (e.g., `.env`)
+- **`FilePermissionHook`**: Asks permission before accessing files outside CWD
+- **`ShellPermissionHook`**: Asks permission before executing shell commands
+- **`FetchPermissionHook`**: Asks permission before fetching web resources
+
+**Permission Prompts**: When a hook requires permission, the user sees:
+```
+[Permission Required] Execute shell command: ls -la
+(yes/no/always):
+```
+
+- **yes**: Allow this one operation
+- **no**: Deny this operation
+- **always**: Allow all similar operations this session (cached in memory)
+
+**Global Bypass**: Set `METO_PERMISSIONS_ENABLED=false` to disable all permission checks.
 
 ### Syntax Shorthands
 
@@ -94,6 +121,7 @@ Agent-specific prompt instructions...
 - `subagents` - Enable `run_task` tool
 - `skills` - Enable `load_skill` tool
 - `todo_manager` - Enable `manage_todos` tool
+- `registry_tools` - Include MCP/registry tools in wildcard tool access
 
 ## Configuration
 
@@ -118,8 +146,49 @@ METO_SKILLS_DIR=.meto/skills
 
 # Features (comma-separated)
 METO_AGENT_FEATURES=agentsmd,todo_manager,subagents,skills
+
+# Security
+METO_PERMISSIONS_ENABLED=true  # Enable permission checks for sensitive operations
 ```
 
 ## Linting
 
 Ruff (format + lint) + basedpyright (type checking) + codespell. Tests excluded from type checking. Run via `just lint` or `uv run python devtools/lint.py`.
+
+## MCP Integration
+
+**FastMCP Client** ([mcp_client.py](src/meto/agent/mcp_client.py)) enables runtime tool discovery from external MCP servers:
+
+Configure via `.meto/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-chrome-devtools"],
+      "env": {"PATH": "$PATH"}
+    }
+  }
+}
+```
+
+Tools are automatically discovered and registered in the runtime [ToolRegistry](src/meto/agent/tool_registry.py), supporting keyword search for dynamic tool resolution.
+
+**Logging**: Agent activity is logged to:
+- JSONL trace files: `{LOG_DIR}/agent_reasoning_{timestamp}_{random}.jsonl`
+- Rich-colored stderr output (human-readable)
+
+## Built-in Agents
+
+- **screenshotter** - Web page screenshots via Chrome DevTools MCP (`.meto/agents/screenshotter.md`)
+- **explore** - Read-only codebase exploration
+- **code** - Code writing and editing
+- **plan** - Implementation planning
+
+## Available Skills
+
+- **prd** - PRD generator (`.meto/skills/prd/`)
+- **context7-docs** - Context7 documentation (`.meto/skills/context7-docs/`)
+- **python-styleguide** - Python coding standards
+- **git-commit** - Git commit conventions
+- **git-worktrees** - Git worktree management
