@@ -416,6 +416,26 @@ def register_tool_handler(tool_name: str, handler: ToolHandler) -> None:
     _TOOL_HANDLERS[tool_name] = handler
 
 
+# Log strategy: defines verbosity per tool
+# - "errors_only": Only log when tool execution fails
+# - "full": Log both tool selection and execution results
+TOOL_LOG_STRATEGY: dict[str, str] = {
+    # Quiet tools - log only errors
+    "read_file": "errors_only",
+    "write_file": "errors_only",
+    "fetch": "errors_only",
+    "grep_search": "errors_only",
+    "load_skill": "errors_only",
+    "manage_todos": "errors_only",
+    "list_dir": "errors_only",
+    # Verbose tools - log everything
+    "shell": "full",
+    "run_task": "full",
+    "ask_user_question": "full",
+    "search_available_tools": "full",
+}
+
+
 # Dispatch table mapping tool names to their handler functions
 _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "shell": _handle_shell,
@@ -453,7 +473,11 @@ def run_tool(
         parameters: JSON-like tool arguments.
         logger: Optional reasoning logger for structured trace output.
     """
-    if logger:
+    # Get log strategy for this tool (default to "full" for unknown tools)
+    log_strategy = TOOL_LOG_STRATEGY.get(tool_name, "full")
+
+    # Only log tool selection for verbose tools
+    if logger and log_strategy == "full":
         logger.log_tool_selection(tool_name, parameters)
 
     tool_output = ""
@@ -461,13 +485,18 @@ def run_tool(
 
     if handler is None:
         tool_output = f"Error: Unknown tool: {tool_name}"
+        # Always log unknown tool errors
+        if logger:
+            logger.log_tool_execution(tool_name, tool_output, error=True)
     else:
         try:
             tool_output = handler(context, parameters)
-            if logger:
+            # Only log success for verbose tools
+            if logger and log_strategy == "full":
                 logger.log_tool_execution(tool_name, tool_output, error=False)
         except Exception as e:
             tool_output = str(e)
+            # Always log errors regardless of strategy
             if logger:
                 logger.log_tool_execution(tool_name, tool_output, error=True)
 
