@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import webbrowser
 from typing import Annotated
 
 import typer
@@ -135,6 +136,35 @@ def run(
         raise typer.Exit(code=0)
 
     interactive_loop(session=session)
+
+
+@app.command("log-viewer")
+def start_log_viewer(
+    port: Annotated[int, typer.Option("--port", "-p")] = 8000,
+    no_browser: Annotated[bool, typer.Option("--no-browser")] = False,
+) -> None:
+    """Start the log viewer web server.
+
+    Args:
+        port: Port to run the server on (default: 8000)
+        no_browser: Don't auto-open browser
+    """
+    import uvicorn
+
+    url = f"http://localhost:{port}"
+
+    print(f"Starting log viewer at {url}")
+    print("Press Ctrl+C to stop")
+
+    if not no_browser:
+        webbrowser.open(url)
+
+    uvicorn.run(
+        "meto.log_viewer.app:app",
+        host="127.0.0.1",
+        port=port,
+        reload=False,
+    )
 
 
 def main() -> None:
