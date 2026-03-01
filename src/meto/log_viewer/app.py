@@ -8,7 +8,11 @@ from fastapi.staticfiles import StaticFiles
 
 from meto.conf import settings
 from meto.log_viewer.models import LogEntry, LogFile, TokenUsage
-from meto.log_viewer.parser import extract_token_usage, parse_log_entries
+from meto.log_viewer.parser import (
+    extract_token_usage,
+    extract_token_usage_per_turn,
+    parse_log_entries,
+)
 
 app = FastAPI(title="Meto Log Viewer")
 
@@ -38,15 +42,23 @@ async def list_logs() -> list[LogFile]:
     return log_files
 
 
+class LogResponse(TokenUsage):
+    """Response model for log file content."""
+
+    entries: list[LogEntry]
+    total_tokens: TokenUsage
+    tokens_per_turn: dict[str, TokenUsage]
+
+
 @app.get("/api/logs/{filename}")
-async def get_log(filename: str) -> dict[str, list[LogEntry] | TokenUsage]:
+async def get_log(filename: str) -> dict[str, list[LogEntry] | TokenUsage | dict[str, TokenUsage]]:
     """Get parsed log entries and token usage for a specific log file.
 
     Args:
         filename: Name of the log file to retrieve
 
     Returns:
-        Dictionary with 'entries' and 'total_tokens' keys
+        Dictionary with 'entries', 'total_tokens', and 'tokens_per_turn' keys
 
     Raises:
         HTTPException: 404 if file not found
@@ -62,15 +74,16 @@ async def get_log(filename: str) -> dict[str, list[LogEntry] | TokenUsage]:
 
     entries = parse_log_entries(filepath)
     total_tokens = extract_token_usage(entries)
+    tokens_per_turn = extract_token_usage_per_turn(entries)
 
     return {
         "entries": entries,
         "total_tokens": total_tokens,
+        "tokens_per_turn": {str(k): v for k, v in tokens_per_turn.items()},
     }
 
 
 # Serve static files (frontend) - must come after API routes
-# Will be created in US-006
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

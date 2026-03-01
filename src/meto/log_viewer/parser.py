@@ -71,3 +71,39 @@ def extract_token_usage(entries: list[LogEntry]) -> TokenUsage:
         cached=total_cached,
         completion=total_completion,
     )
+
+
+def extract_token_usage_per_turn(entries: list[LogEntry]) -> dict[int | str, TokenUsage]:
+    """Extract token usage per turn from log entries.
+
+    Token usage messages are logged at the end of each turn, so we associate
+    them with the turn number of that entry.
+
+    Args:
+        entries: List of LogEntry objects to scan
+
+    Returns:
+        Dictionary mapping turn numbers to TokenUsage objects
+    """
+    per_turn: dict[int | str, TokenUsage] = {}
+
+    # Pattern matches: "Token usage - Input: 2858(0), Output: 144"
+    pattern = re.compile(r"Token usage - Input: (\d+)\((\d+)\), Output: (\d+)")
+
+    for entry in entries:
+        match = pattern.search(entry.message)
+        if match:
+            # Use the entry's turn number (or 'pre' for pre-turn entries)
+            turn_key = entry.turn if entry.turn is not None else "pre"
+
+            if turn_key not in per_turn:
+                per_turn[turn_key] = TokenUsage(prompt=0, cached=0, completion=0)
+
+            current = per_turn[turn_key]
+            per_turn[turn_key] = TokenUsage(
+                prompt=current.prompt + int(match.group(1)),
+                cached=current.cached + int(match.group(2)),
+                completion=current.completion + int(match.group(3)),
+            )
+
+    return per_turn

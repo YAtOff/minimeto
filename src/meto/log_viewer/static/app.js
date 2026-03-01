@@ -3,7 +3,7 @@
 // State
 let logFiles = [];
 let currentFile = null;
-let currentEntries = [];
+let currentData = null;
 
 // DOM Elements
 const logList = document.getElementById('log-list');
@@ -54,9 +54,8 @@ async function selectFile(filename) {
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
-        const data = await response.json();
-        currentEntries = data.entries;
-        renderLogContent(data);
+        currentData = await response.json();
+        renderLogContent(currentData);
     } catch (error) {
         logContent.innerHTML = `<div class="error">Failed to load log: ${error.message}</div>`;
     } finally {
@@ -66,7 +65,7 @@ async function selectFile(filename) {
 
 // Render log content with timeline view
 function renderLogContent(data) {
-    const { entries, total_tokens } = data;
+    const { entries, total_tokens, tokens_per_turn } = data;
 
     // Group entries by turn
     const turns = groupByTurn(entries);
@@ -91,7 +90,8 @@ function renderLogContent(data) {
 
     // Render each turn as a timeline item
     for (const [turnNum, turnEntries] of turns) {
-        html += renderTurn(turnNum, turnEntries);
+        const turnTokens = tokens_per_turn[turnNum.toString()] || tokens_per_turn[turnNum];
+        html += renderTurn(turnNum, turnEntries, turnTokens);
     }
 
     html += '</div>';
@@ -119,18 +119,31 @@ function groupByTurn(entries) {
 }
 
 // Render a turn in the timeline
-function renderTurn(turnNum, entries) {
+function renderTurn(turnNum, entries, turnTokens) {
     const isPreTurn = turnNum === 'pre';
     const turnLabel = isPreTurn ? 'Initialization' : `Turn ${turnNum}`;
 
     // Classify entries
     const classified = classifyEntries(entries);
 
+    // Build token usage display
+    let tokenHtml = '';
+    if (turnTokens && (turnTokens.prompt > 0 || turnTokens.completion > 0)) {
+        tokenHtml = `
+            <div class="turn-tokens">
+                <span class="token-item" title="Prompt tokens">📝 ${formatNumber(turnTokens.prompt)}</span>
+                ${turnTokens.cached > 0 ? `<span class="token-item cached" title="Cached tokens">⚡ ${formatNumber(turnTokens.cached)}</span>` : ''}
+                <span class="token-item" title="Completion tokens">💬 ${formatNumber(turnTokens.completion)}</span>
+            </div>
+        `;
+    }
+
     let html = `
         <div class="turn-block ${isPreTurn ? 'turn-pre' : ''}">
             <div class="turn-header">
                 <span class="turn-number">${turnLabel}</span>
                 <span class="turn-count">${entries.length} entries</span>
+                ${tokenHtml}
             </div>
             <div class="turn-content">
     `;
