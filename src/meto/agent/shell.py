@@ -15,6 +15,8 @@ from meto.conf import settings
 
 def get_shell_name() -> str:
     """Return the name of the detected shell for display purposes."""
+    if shutil.which("zsh"):
+        return "zsh"
     if shutil.which("bash"):
         return "bash (Git Bash/WSL)"
     if shutil.which("pwsh"):
@@ -27,9 +29,13 @@ def get_shell_name() -> str:
 def pick_shell_runner() -> list[str] | None:
     """Pick an available shell runner.
 
-    We prefer bash if present (Git Bash / WSL), otherwise PowerShell.
+    We prefer zsh if present, otherwise bash (Git Bash / WSL), otherwise PowerShell.
     Returns a base argv list to which the actual command string should be appended.
     """
+
+    zsh = shutil.which("zsh")
+    if zsh:
+        return [zsh, "-lc"]
 
     bash = shutil.which("bash")
     if bash:
