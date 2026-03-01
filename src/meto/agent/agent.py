@@ -26,7 +26,18 @@ def get_tools_for_agent(allowed_tools: list[str] | str) -> list[dict[str, Any]]:
         List of tool schemas.
     """
     if allowed_tools == "*":
-        return TOOLS
+        # Start with static tools
+        tools = list(TOOLS)
+
+        # Optionally include registry tools
+        if settings.INCLUDE_REGISTRY_IN_ALL_TOOLS:
+            static_tool_names = {tool["function"]["name"] for tool in TOOLS}
+            for registration in registry.catalog.values():
+                # Avoid duplicates - static tools take precedence
+                if registration.name not in static_tool_names:
+                    tools.append(registration.schema)
+
+        return tools
 
     static_tools = {tool["function"]["name"]: tool for tool in TOOLS}
     resolved: list[dict[str, Any]] = []

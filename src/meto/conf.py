@@ -99,6 +99,11 @@ class Settings(BaseSettings):
         description="Enabled agent features: agentsmd, subagents, skills, todo_manager, mcp",
     )
 
+    INCLUDE_REGISTRY_IN_ALL_TOOLS: bool = Field(
+        default=False,
+        description="Include registry tools (MCP, runtime) when agent has access to all tools (*).",
+    )
+
     # --- Security ---
 
     PERMISSIONS_ENABLED: bool = Field(
