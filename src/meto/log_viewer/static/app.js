@@ -4,15 +4,30 @@
 let logFiles = [];
 let currentFile = null;
 let currentData = null;
+let searchQuery = '';
 
 // DOM Elements
 const logList = document.getElementById('log-list');
 const logContent = document.getElementById('log-content');
+const searchContainer = document.getElementById('search-container');
+const searchInput = document.getElementById('search-input');
+const searchCount = document.getElementById('search-count');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadLogFiles();
+    setupSearch();
 });
+
+// Setup search functionality
+function setupSearch() {
+    searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value.trim().toLowerCase();
+        if (currentData) {
+            renderLogContent(currentData);
+        }
+    });
+}
 
 // Load list of log files
 async function loadLogFiles() {
@@ -49,6 +64,9 @@ async function selectFile(filename) {
     logContent.innerHTML = '<div class="loading">Loading...</div>';
     logContent.classList.add('loading');
 
+    // Show search bar when a file is loaded
+    searchContainer.classList.remove('hidden');
+
     try {
         const response = await fetch(`/api/logs/${encodeURIComponent(filename)}`);
         if (!response.ok) {
@@ -67,8 +85,25 @@ async function selectFile(filename) {
 function renderLogContent(data) {
     const { entries, total_tokens, tokens_per_turn } = data;
 
+    // Filter entries if search query exists
+    let filteredEntries = entries;
+    if (searchQuery) {
+        filteredEntries = entries.filter(entry =>
+            entry.message.toLowerCase().includes(searchQuery) ||
+            entry.agent_name.toLowerCase().includes(searchQuery) ||
+            (entry.turn !== null && entry.turn.toString().includes(searchQuery))
+        );
+    }
+
+    // Update search count
+    if (searchQuery) {
+        searchCount.textContent = `${filteredEntries.length} of ${entries.length} entries`;
+    } else {
+        searchCount.textContent = '';
+    }
+
     // Group entries by turn
-    const turns = groupByTurn(entries);
+    const turns = groupByTurn(filteredEntries);
 
     let html = `
         <div class="token-summary">
@@ -88,10 +123,14 @@ function renderLogContent(data) {
         <div class="timeline">
     `;
 
-    // Render each turn as a timeline item
-    for (const [turnNum, turnEntries] of turns) {
-        const turnTokens = tokens_per_turn[turnNum.toString()] || tokens_per_turn[turnNum];
-        html += renderTurn(turnNum, turnEntries, turnTokens);
+    if (filteredEntries.length === 0 && searchQuery) {
+        html += '<div class="no-results">No entries match your search</div>';
+    } else {
+        // Render each turn as a timeline item
+        for (const [turnNum, turnEntries] of turns) {
+            const turnTokens = tokens_per_turn[turnNum.toString()] || tokens_per_turn[turnNum];
+            html += renderTurn(turnNum, turnEntries, turnTokens);
+        }
     }
 
     html += '</div>';
@@ -201,6 +240,10 @@ function classifyEntries(entries) {
 // Render entry with type-specific styling
 function renderEntryWithType(entry, type, icon) {
     const levelClass = entry.level.toLowerCase();
+    const highlightedMessage = searchQuery
+        ? highlightText(escapeHtml(entry.message), searchQuery)
+        : escapeHtml(entry.message);
+
     return `
         <div class="entry ${levelClass} entry-${type}">
             <div class="entry-header">
@@ -209,9 +252,22 @@ function renderEntryWithType(entry, type, icon) {
                 <span class="level">${escapeHtml(entry.level)}</span>
                 <span class="agent-name">${escapeHtml(entry.agent_name)}</span>
             </div>
-            <div class="message">${escapeHtml(entry.message)}</div>
+            <div class="message">${highlightedMessage}</div>
         </div>
     `;
+}
+
+// Highlight matching text
+function highlightText(text, query) {
+    if (!query) return text;
+
+    const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
+}
+
+// Escape regex special characters
+function escapeRegex(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // Render a single entry (legacy, used for non-timeline views)

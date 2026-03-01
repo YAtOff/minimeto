@@ -94,6 +94,57 @@ main {
     color: #64748b;
 }
 
+/* Search Box */
+#search-container {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+#search-container.hidden {
+    display: none;
+}
+
+#search-input {
+    flex: 1;
+    max-width: 400px;
+    padding: 0.5rem 1rem;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 0.9rem;
+}
+
+#search-input:focus {
+    outline: none;
+    border-color: #e94560;
+}
+
+#search-input::placeholder {
+    color: #64748b;
+}
+
+#search-count {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* Text Highlighting */
+mark {
+    background: #f59e0b;
+    color: #1a1a2e;
+    padding: 0.1rem 0.2rem;
+    border-radius: 2px;
+}
+
+.no-results {
+    text-align: center;
+    padding: 2rem;
+    color: #64748b;
+}
+
 /* Token Summary */
 .token-summary {
     background: #0f3460;
