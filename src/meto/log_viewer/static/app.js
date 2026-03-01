@@ -3,6 +3,7 @@
 // State
 let logFiles = [];
 let currentFile = null;
+let currentEntries = [];
 
 // DOM Elements
 const logList = document.getElementById('log-list');
@@ -54,6 +55,7 @@ async function selectFile(filename) {
             throw new Error(`HTTP ${response.status}`);
         }
         const data = await response.json();
+        currentEntries = data.entries;
         renderLogContent(data);
     } catch (error) {
         logContent.innerHTML = `<div class="error">Failed to load log: ${error.message}</div>`;
@@ -62,9 +64,12 @@ async function selectFile(filename) {
     }
 }
 
-// Render log content
+// Render log content with timeline view
 function renderLogContent(data) {
     const { entries, total_tokens } = data;
+
+    // Group entries by turn
+    const turns = groupByTurn(entries);
 
     let html = `
         <div class="token-summary">
@@ -81,18 +86,122 @@ function renderLogContent(data) {
                 <span class="label">Completion Tokens</span>
             </div>
         </div>
-        <div class="entries">
+        <div class="timeline">
     `;
 
-    for (const entry of entries) {
-        html += renderEntry(entry);
+    // Render each turn as a timeline item
+    for (const [turnNum, turnEntries] of turns) {
+        html += renderTurn(turnNum, turnEntries);
     }
 
     html += '</div>';
     logContent.innerHTML = html;
 }
 
-// Render a single entry
+// Group entries by turn number
+function groupByTurn(entries) {
+    const turns = new Map();
+
+    for (const entry of entries) {
+        const turnKey = entry.turn !== null ? entry.turn : 'pre';
+        if (!turns.has(turnKey)) {
+            turns.set(turnKey, []);
+        }
+        turns.get(turnKey).push(entry);
+    }
+
+    // Sort by turn number (put 'pre' entries first)
+    return new Map([...turns.entries()].sort((a, b) => {
+        if (a[0] === 'pre') return -1;
+        if (b[0] === 'pre') return 1;
+        return a[0] - b[0];
+    }));
+}
+
+// Render a turn in the timeline
+function renderTurn(turnNum, entries) {
+    const isPreTurn = turnNum === 'pre';
+    const turnLabel = isPreTurn ? 'Initialization' : `Turn ${turnNum}`;
+
+    // Classify entries
+    const classified = classifyEntries(entries);
+
+    let html = `
+        <div class="turn-block ${isPreTurn ? 'turn-pre' : ''}">
+            <div class="turn-header">
+                <span class="turn-number">${turnLabel}</span>
+                <span class="turn-count">${entries.length} entries</span>
+            </div>
+            <div class="turn-content">
+    `;
+
+    // Render entries by type with icons
+    if (classified.userInput) {
+        html += renderEntryWithType(classified.userInput, 'user', '→');
+    }
+
+    if (classified.reasoning.length > 0) {
+        for (const entry of classified.reasoning) {
+            html += renderEntryWithType(entry, 'reasoning', '💭');
+        }
+    }
+
+    if (classified.toolCalls.length > 0) {
+        for (const entry of classified.toolCalls) {
+            html += renderEntryWithType(entry, 'tool', '🔧');
+        }
+    }
+
+    if (classified.toolResults.length > 0) {
+        for (const entry of classified.toolResults) {
+            const isError = entry.level === 'ERROR';
+            html += renderEntryWithType(entry, isError ? 'error' : 'result', isError ? '✗' : '✓');
+        }
+    }
+
+    if (classified.other.length > 0) {
+        for (const entry of classified.other) {
+            html += renderEntryWithType(entry, entry.level.toLowerCase(), '•');
+        }
+    }
+
+    html += '</div></div>';
+    return html;
+}
+
+// Classify entries by type
+function classifyEntries(entries) {
+    return {
+        userInput: entries.find(e => e.message.startsWith('User input:')),
+        reasoning: entries.filter(e => e.message.includes('reasoning:') || e.message.includes('reasoning:')),
+        toolCalls: entries.filter(e => e.message.startsWith('Tool selected:')),
+        toolResults: entries.filter(e => e.message.includes('result:')),
+        other: entries.filter(e =>
+            !e.message.startsWith('User input:') &&
+            !e.message.includes('reasoning:') &&
+            !e.message.startsWith('Tool selected:') &&
+            !e.message.includes('result:')
+        )
+    };
+}
+
+// Render entry with type-specific styling
+function renderEntryWithType(entry, type, icon) {
+    const levelClass = entry.level.toLowerCase();
+    return `
+        <div class="entry ${levelClass} entry-${type}">
+            <div class="entry-header">
+                <span class="entry-icon">${icon}</span>
+                <span class="timestamp">${formatTimestamp(entry.timestamp)}</span>
+                <span class="level">${escapeHtml(entry.level)}</span>
+                <span class="agent-name">${escapeHtml(entry.agent_name)}</span>
+            </div>
+            <div class="message">${escapeHtml(entry.message)}</div>
+        </div>
+    `;
+}
+
+// Render a single entry (legacy, used for non-timeline views)
 function renderEntry(entry) {
     const levelClass = entry.level.toLowerCase();
     return `
