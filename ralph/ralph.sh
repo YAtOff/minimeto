@@ -68,8 +68,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   # Run the with the ralph prompt
   OUTPUT=$(cat "$SCRIPT_DIR/prompt.md" | meto --one-shot 2>&1 | tee /dev/stderr) || true
 
-  # Check for completion signal
-  if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
+  # Check for completion signal - all stories pass
+  if python3 -c "import json; data = json.load(open('$PRD_FILE')); all_passed = all(story['passes'] for story in data.get('userStories', [])); exit(0 if all_passed else 1)"; then
     echo ""
     echo "Ralph completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
