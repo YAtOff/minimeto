@@ -26,6 +26,7 @@ from openai import OpenAI
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.hooks import post_tool_use, pre_tool_use
+from meto.agent.hooks.rule_injection import RuleInjectionHook
 from meto.agent.reasoning_log import ReasoningLogger
 from meto.agent.system_prompt import build_system_prompt
 from meto.agent.tool_registry import registry
@@ -88,6 +89,9 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
         reasoning_logger.log_system_prompt(build_system_prompt(agent.prompt))
         reasoning_logger.log_user_input(prompt)
         context.history.append({"role": "user", "content": prompt})
+
+        # Reset rule injection tracking for this new prompt
+        RuleInjectionHook.reset_injected_rules()
 
         for _turn in range(agent.max_turns):
             # Check for interruption at the start of each turn
@@ -184,6 +188,17 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                             or "Action blocked by security policy",
                         }
                     )
+                    continue
+
+                # Inject content if provided by hook (e.g., rules)
+                if pre_tool_hook_result.injected_content:
+                    context.history.append(
+                        {
+                            "role": "system",
+                            "content": pre_tool_hook_result.injected_content,
+                        }
+                    )
+                    # Continue to next turn to let LLM see the context and respond
                     continue
 
                 # Execute tool (logging happens inside the tool runner)

@@ -7,6 +7,7 @@ from typing import Any, ClassVar, Protocol
 class HookResult:
     success: bool
     error: str | None = None
+    injected_content: str | None = None
 
 
 class Hook(Protocol):

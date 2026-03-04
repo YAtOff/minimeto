@@ -92,11 +92,16 @@ class Settings(BaseSettings):
         description="Directory for skill directories.",
     )
 
+    RULES_DIR: Path = Field(
+        default=Path.cwd() / ".meto" / "rules",
+        description="Directory for rule configuration files.",
+    )
+
     # --- Agent Features ---
 
     AGENT_FEATURES: list[str] = Field(
-        default=["agentsmd", "todo_manager", "subagents", "skills", "mcp"],
-        description="Enabled agent features: agentsmd, subagents, skills, todo_manager, mcp",
+        default=["agentsmd", "todo_manager", "subagents", "skills", "mcp", "rules"],
+        description="Enabled agent features: agentsmd, subagents, skills, todo_manager, mcp, rules",
     )
 
     INCLUDE_REGISTRY_IN_ALL_TOOLS: bool = Field(

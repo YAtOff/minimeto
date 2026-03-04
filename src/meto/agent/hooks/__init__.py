@@ -25,6 +25,9 @@ def pre_tool_use(tool_name: str, arguments: dict[str, Any]) -> HookResult:
             result = hook_instance.run()
             if not result.success:
                 return result
+            elif result.injected_content:
+                # If content was injected, we can stop here since the context will be updated
+                return result
     return HookResult(success=True)
 
 
