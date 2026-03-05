@@ -81,22 +81,229 @@ header h1 {
     padding: 40px;
 }
 
-/* Log entry styling */
+/* Token summary */
+.token-summary {
+    background-color: #0f3460;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+/* === Timeline Layout === */
+
+.timeline {
+    position: relative;
+    margin-left: 20px;
+    padding-left: 30px;
+}
+
+/* Vertical line connecting turns */
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, #4a5568, #2d3748);
+    border-radius: 2px;
+}
+
+/* === Turn Group === */
+
+.turn-group {
+    position: relative;
+    margin-bottom: 30px;
+}
+
+.turn-header {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+/* Circle marker on timeline */
+.turn-marker {
+    position: absolute;
+    left: -50px;
+    top: 0;
+    width: 40px;
+    height: 40px;
+    background: #2d3748;
+    border: 3px solid #4a5568;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.turn-number {
+    font-weight: bold;
+    font-size: 0.75rem;
+    color: #e2e8f0;
+}
+
+.turn-entries {
+    margin-left: 10px;
+    border-left: 2px solid #4a5568;
+    padding-left: 15px;
+}
+
+/* === Entry Type Styles === */
+
+/* Base entry adjustments */
 .log-entry {
-    padding: 10px;
-    margin-bottom: 8px;
-    background-color: #1a1a2e;
-    border-radius: 4px;
-    border-left: 3px solid #4da6ff;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 6px;
     font-family: "SF Mono", Monaco, "Courier New", monospace;
     font-size: 13px;
+    transition: filter 0.2s;
+}
+
+.entry-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.entry-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    flex-wrap: wrap;
+}
+
+.entry-type-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
 }
 
 .log-entry .timestamp {
     color: #888;
-    margin-right: 10px;
+    font-size: 12px;
 }
 
+.log-entry .agent {
+    color: #888;
+    font-size: 12px;
+}
+
+.log-entry .message {
+    margin-top: 5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* User Input - Blue */
+.entry-user-input {
+    background: rgba(33, 150, 243, 0.1);
+    border-left: 3px solid #2196f3;
+}
+
+.entry-user-input .entry-icon {
+    color: #2196f3;
+}
+
+.entry-user-input .entry-type-label {
+    background: #2196f3;
+    color: white;
+}
+
+/* Assistant Reasoning - Purple */
+.entry-reasoning {
+    background: rgba(156, 39, 176, 0.1);
+    border-left: 3px solid #9c27b0;
+}
+
+.entry-reasoning .entry-icon {
+    color: #9c27b0;
+}
+
+.entry-reasoning .entry-type-label {
+    background: #9c27b0;
+    color: white;
+}
+
+/* Tool Calls - Orange */
+.entry-tool-call {
+    background: rgba(255, 152, 0, 0.1);
+    border-left: 3px solid #ff9800;
+}
+
+.entry-tool-call .entry-icon {
+    color: #ff9800;
+}
+
+.entry-tool-call .entry-type-label {
+    background: #ff9800;
+    color: white;
+}
+
+/* Results - Green */
+.entry-result {
+    background: rgba(76, 175, 80, 0.1);
+    border-left: 3px solid #4caf50;
+}
+
+.entry-result .entry-icon {
+    color: #4caf50;
+}
+
+.entry-result .entry-type-label {
+    background: #4caf50;
+    color: white;
+}
+
+/* Other - Gray */
+.entry-other {
+    background: rgba(158, 158, 158, 0.1);
+    border-left: 3px solid #9e9e9e;
+}
+
+.entry-other .entry-icon {
+    color: #9e9e9e;
+}
+
+.entry-other .entry-type-label {
+    background: #9e9e9e;
+    color: white;
+}
+
+/* Hover effects */
+.log-entry:hover {
+    filter: brightness(1.1);
+}
+
+/* === Turn with null (Turn 0) === */
+
+.turn-group[data-turn="0"] .turn-marker {
+    border-color: #9e9e9e;
+    opacity: 0.7;
+}
+
+.turn-group[data-turn="0"] .turn-number {
+    color: #9e9e9e;
+}
+
+/* Legacy level badges (for fallback) */
 .log-entry .level {
     font-weight: bold;
     padding: 2px 6px;
@@ -123,10 +330,4 @@ header h1 {
 .log-entry .level.ERROR {
     background-color: #f44336;
     color: white;
-}
-
-.log-entry .message {
-    margin-top: 5px;
-    white-space: pre-wrap;
-    word-break: break-word;
 }
