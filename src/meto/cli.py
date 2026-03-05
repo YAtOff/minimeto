@@ -8,6 +8,7 @@ from typing import Annotated
 import typer
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
+from rich.console import Console
 
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
@@ -22,6 +23,7 @@ from meto.agent.tool_registry import registry
 from meto.conf import settings
 
 app = typer.Typer(add_completion=False)
+console = Console()
 
 
 def _run_single_prompt(
@@ -135,6 +137,51 @@ def run(
         raise typer.Exit(code=0)
 
     interactive_loop(session=session)
+
+
+@app.command("logs")
+def logs_command(
+    serve: Annotated[
+        bool,
+        typer.Option(
+            "--serve",
+            help="Start the log viewer web server",
+        ),
+    ] = False,
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            help="Host to bind the server to",
+        ),
+    ] = "localhost",
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port",
+            help="Port to bind the server to",
+        ),
+    ] = 8000,
+    no_browser: Annotated[
+        bool,
+        typer.Option(
+            "--no-browser",
+            help="Don't auto-open browser",
+        ),
+    ] = False,
+) -> None:
+    """View agent reasoning logs.
+
+    Use --serve to start the web-based log viewer.
+    """
+    if serve:
+        from meto.log_viewer.app import run_server
+
+        run_server(host=host, port=port, open_browser=not no_browser)
+    else:
+        console.print("Use --serve to start the log viewer web server.")
+        console.print("Example: meto logs --serve")
+        raise typer.Exit(1)
 
 
 def main() -> None:

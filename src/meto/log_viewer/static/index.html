@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meto Log Viewer</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Meto Log Viewer</h1>
+        </header>
+        <main>
+            <div class="log-selector">
+                <label for="log-file">Select Log File:</label>
+                <select id="log-file">
+                    <option value="">-- Select a log file --</option>
+                </select>
+                <button id="refresh-btn">Refresh</button>
+            </div>
+            <div id="log-content">
+                <p class="placeholder">Select a log file to view its contents.</p>
+            </div>
+        </main>
+    </div>
+    <script src="/app.js"></script>
+</body>
+</html>

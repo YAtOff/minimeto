@@ -1,0 +1,132 @@
+/* Meto Log Viewer Styles */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: #1a1a2e;
+    color: #eee;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 10px;
+}
+
+header h1 {
+    font-size: 24px;
+    color: #4da6ff;
+}
+
+.log-selector {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #16213e;
+    border-radius: 8px;
+}
+
+.log-selector label {
+    font-weight: 500;
+}
+
+.log-selector select {
+    flex: 1;
+    padding: 8px 12px;
+    background-color: #1a1a2e;
+    color: #eee;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.log-selector button {
+    padding: 8px 16px;
+    background-color: #4da6ff;
+    color: #1a1a2e;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.log-selector button:hover {
+    background-color: #6db8ff;
+}
+
+#log-content {
+    background-color: #16213e;
+    border-radius: 8px;
+    padding: 20px;
+    min-height: 400px;
+}
+
+.placeholder {
+    color: #666;
+    text-align: center;
+    padding: 40px;
+}
+
+/* Log entry styling */
+.log-entry {
+    padding: 10px;
+    margin-bottom: 8px;
+    background-color: #1a1a2e;
+    border-radius: 4px;
+    border-left: 3px solid #4da6ff;
+    font-family: "SF Mono", Monaco, "Courier New", monospace;
+    font-size: 13px;
+}
+
+.log-entry .timestamp {
+    color: #888;
+    margin-right: 10px;
+}
+
+.log-entry .level {
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 8px;
+    font-size: 11px;
+}
+
+.log-entry .level.INFO {
+    background-color: #2196f3;
+    color: white;
+}
+
+.log-entry .level.DEBUG {
+    background-color: #666;
+    color: white;
+}
+
+.log-entry .level.WARNING {
+    background-color: #ff9800;
+    color: #1a1a2e;
+}
+
+.log-entry .level.ERROR {
+    background-color: #f44336;
+    color: white;
+}
+
+.log-entry .message {
+    margin-top: 5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
