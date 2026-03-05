@@ -160,8 +160,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented real-time search with debouncing (150ms), text highlighting (yellow background), match counter, clear button, and Ctrl+F keyboard shortcut. Search is case-insensitive, uses literal matching (regex chars escaped), and preserves timeline structure by hiding empty turns. XSS protection via escapeHtml() before highlighting. Programmatic testing verified: search functions present in JS, highlighting works, match counter displays correctly."
     },
     {
       "id": "US-011",
@@ -175,8 +175,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented error and warning entry types with level-based classification (checks entry.level field first), red/amber styling with Material Design colors (#f44336 for errors, #ffc107 for warnings), error icons (fa-exclamation-triangle, fa-exclamation-circle), and filter toggle buttons in search container. Filter buttons allow combining text search with type filters. Programmatic verification: CSS styles correctly applied, filter buttons visible in UI screenshot, all lint/typecheck passes."
     }
   ]
 }

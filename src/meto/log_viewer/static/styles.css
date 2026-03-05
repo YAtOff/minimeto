@@ -148,6 +148,55 @@ header h1 {
     color: #f44336;
 }
 
+/* === Filter Buttons === */
+
+.filter-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.filter-btn {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid #333;
+    color: #888;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+    border-color: #555;
+    color: #aaa;
+}
+
+.filter-btn.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eee;
+    border-color: #666;
+}
+
+.filter-btn[data-type="error"].active {
+    border-color: #f44336;
+    color: #f44336;
+    background: rgba(244, 67, 54, 0.15);
+}
+
+.filter-btn[data-type="warning"].active {
+    border-color: #ffc107;
+    color: #ffc107;
+    background: rgba(255, 193, 7, 0.15);
+}
+
+.filter-btn i {
+    font-size: 12px;
+}
+
 #log-content {
     background-color: #16213e;
     border-radius: 8px;
@@ -397,6 +446,36 @@ header h1 {
     color: white;
 }
 
+/* Error - Red */
+.entry-error {
+    background: rgba(244, 67, 54, 0.1);
+    border-left: 3px solid #f44336;
+}
+
+.entry-error .entry-icon {
+    color: #f44336;
+}
+
+.entry-error .entry-type-label {
+    background: #f44336;
+    color: white;
+}
+
+/* Warning - Yellow/Amber */
+.entry-warning {
+    background: rgba(255, 193, 7, 0.1);
+    border-left: 3px solid #ffc107;
+}
+
+.entry-warning .entry-icon {
+    color: #ffc107;
+}
+
+.entry-warning .entry-type-label {
+    background: #ffc107;
+    color: #1a1a2e;  /* Dark text for readability on yellow */
+}
+
 /* Hover effects */
 .log-entry:hover {
     filter: brightness(1.1);
@@ -440,6 +519,17 @@ header h1 {
 
 .entry-result .highlight {
     background-color: #c5e1a5;
+}
+
+/* Error highlight - lighter yellow for red background */
+.entry-error .highlight {
+    background-color: #fff59d;
+}
+
+/* Warning highlight - darker yellow for amber background */
+.entry-warning .highlight {
+    background-color: #ffe082;
+    color: #333;
 }
 
 /* === Filtered State === */

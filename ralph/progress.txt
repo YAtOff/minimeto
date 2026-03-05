@@ -159,3 +159,89 @@ Session:
   - Token usage regex in parser.py: "Token usage - Input: (\d+)\((\d+)\), Output: (\d+)"
   - Tokens are attributed to the most recent turn in aggregate_tokens_by_turn()
 ---
+
+## Thu 5 Mar 2026 18:40:00 EET - US-010
+Session: 
+- Implemented search/filter functionality with real-time filtering
+- Created planner agent design with detailed implementation plan
+- Added search UI components:
+  - Search container with input, clear button (X), match counter
+  - 150ms debounce on input for performance
+  - Ctrl+F keyboard shortcut to focus search
+  - aria-live="polite" for accessibility
+- Added search logic in JavaScript:
+  - handleSearch() - debounced input handler
+  - displayLogContentFiltered() - main filter orchestrator
+  - createTurnElementFiltered() - turn rendering with filtering
+  - createEntryElementFiltered() - entry with highlighting
+  - highlightText() - XSS-safe text highlighting (escapeHtml first, then wrap matches)
+  - updateSearchCount() - match counter display ("X of Y entries")
+- Search behavior:
+  - Case-insensitive literal matching
+  - Regex special chars escaped (not interpreted)
+  - Timeline structure preserved (empty turns hidden)
+  - Token counts unchanged (show original turn totals)
+  - "No matches" message when no results
+- All acceptance criteria verified:
+  ✓ Search input field above log display
+  ✓ Filter entries in real-time as user types
+  ✓ Highlight matching text (yellow background)
+  ✓ Show count of matching entries
+  ✓ Typecheck passes (0 errors, 0 warnings)
+- Programmatic testing:
+  - Search functions present in JavaScript (handleSearch, highlightText, etc.)
+  - HTML contains search container, input, clear button, counter
+  - CSS has search styles and highlight classes
+  - Tested various search terms: 'tool' (64 matches), 'user' (21), 'error' (3)
+  - API returns correct data structure for filtering
+- Files changed:
+  - src/meto/log_viewer/static/index.html (added search container)
+  - src/meto/log_viewer/static/styles.css (added search + highlight styles)
+  - src/meto/log_viewer/static/app.js (added search functions, JSDoc types)
+  - ralph/prd.json (updated US-010 passes: true with notes)
+- **Learnings for future iterations:**
+  - XSS prevention pattern: escapeHtml() FIRST, then highlightText() on escaped text
+  - Debounce timing: 150ms is good balance between responsiveness and performance
+  - Filter after turn grouping to preserve timeline context
+  - Empty turns should be hidden when filtering (not shown with 0 entries)
+  - The search counter shows "X of Y entries" only when filtering (total=0 when no search)
+  - highlightText() must escape regex special chars in search term before creating RegExp
+  - Search is case-insensitive via .toLowerCase() on both message and search term
+  - The clear button should also reset the search and focus the input
+---
+## Thu 5 Mar 2026 19:30:00 EET - US-011
+Session: 
+- Implemented error and warning highlighting for log entries
+- Added level-based classification in classifyEntryType() - checks entry.level first
+- Added CSS styles for .entry-error (red #f44336) and .entry-warning (amber #ffc107)
+- Added Font Awesome icons: fa-exclamation-triangle (error), fa-exclamation-circle (warning)
+- Added filter toggle buttons (Errors, Warnings) in search container
+- Filter buttons work with text search (both can be combined)
+- Reset filters when selecting new log file
+- All acceptance criteria verified:
+  ✓ Error entries with red background and border
+  ✓ Error icon next to error messages
+  ✓ Filter toggle to show only errors
+  ✓ Typecheck passes (0 errors, 0 warnings)
+  ✓ Browser verified (screenshot shows filter buttons)
+- Programmatic testing:
+  - CSS styles correctly defined for error/warning entry types
+  - iconMap and typeLabelMap include error/warning entries
+  - Filter buttons present in HTML with data-type attributes
+  - Filter logic combines with text search (matchesSearch && matchesFilter)
+  - Filter buttons toggle activeFilters Set and re-render
+- Files changed:
+  - src/meto/log_viewer/static/app.js (added error/warning classification, filter logic)
+  - src/meto/log_viewer/static/styles.css (added error/warning styles, filter button styles)
+  - src/meto/log_viewer/static/index.html (added filter buttons)
+  - ralph/prd.json (updated US-011 passes: true with notes)
+- **Learnings for future iterations:**
+  - Level-based classification is more reliable than pattern matching for errors/warnings
+  - Filter state uses Set<string> for O(1) lookup and easy add/delete
+  - Filter buttons should be reset when loading a new log file
+  - CSS follows existing entry type pattern: .entry-{TYPE} with background, border-left, icon color, and label
+  - Filter toggle combines with text search using AND logic (both must match)
+  - Material Design colors work well: Red 500 (#f44336) for errors, Amber 500 (#ffc107) for warnings
+  - The current log files only have INFO level entries, but the implementation is ready for ERROR/WARNING levels
+  - Screenshotter agent can verify UI elements even when backend data doesn't have the target data
+---

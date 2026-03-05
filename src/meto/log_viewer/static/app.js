@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     /** @type {LogData|null} */
     let currentLogData = null;
 
+    /** @type {Set<string>} */
+    let activeFilters = new Set();
+
     // Load log files on page load
     loadLogFiles();
 
@@ -55,6 +58,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('search-input').value = '';
             currentSearchTerm = '';
             currentLogData = null;
+            activeFilters.clear();
+            
+            // Reset filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
             
             logContent.innerHTML = '<p class="placeholder">Select a log file to view its contents.</p>';
         }
@@ -99,6 +108,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Filter button click handlers
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.type;
+            if (activeFilters.has(type)) {
+                activeFilters.delete(type);
+                btn.classList.remove('active');
+            } else {
+                activeFilters.add(type);
+                btn.classList.add('active');
+            }
+            handleSearch(currentSearchTerm);  // Re-render with new filter
+        });
+    });
+
     async function loadLogFiles() {
         try {
             const response = await fetch('/api/logs');
@@ -136,11 +160,19 @@ document.addEventListener('DOMContentLoaded', () => {
     // === Entry Classification ===
 
     /**
-     * Classify entry type based on message content and level
+     * Classify entry type based on level field and message content
      * @param {Object} entry - Log entry object
-     * @returns {string} Entry type: 'user-input', 'reasoning', 'tool-call', 'result', or 'other'
+     * @returns {string} Entry type: 'error', 'warning', 'user-input', 'reasoning', 'tool-call', 'result', or 'other'
      */
     function classifyEntryType(entry) {
+        // Check level field first for errors and warnings
+        if (entry.level === 'ERROR') {
+            return 'error';
+        }
+        if (entry.level === 'WARNING') {
+            return 'warning';
+        }
+        
         const message = entry.message.toLowerCase();
         
         // User input patterns
@@ -282,19 +314,23 @@ document.addEventListener('DOMContentLoaded', () => {
             let groupHasMatches = false;
             
             group.entries.forEach(entry => {
-                const matches = searchTerm === '' || 
+                // Check both search term and type filters
+                const matchesSearch = searchTerm === '' || 
                     entry.message.toLowerCase().includes(searchTerm);
+                const matchesFilter = activeFilters.size === 0 || 
+                    activeFilters.has(entry.type);
+                const matches = matchesSearch && matchesFilter;
                 
                 if (matches) {
                     filteredEntries.push(entry);
                     groupHasMatches = true;
-                    if (searchTerm !== '') {
+                    if (searchTerm !== '' || activeFilters.size > 0) {
                         totalMatches++;
                     }
                 }
             });
             
-            if (searchTerm === '' || groupHasMatches) {
+            if ((searchTerm === '' && activeFilters.size === 0) || groupHasMatches) {
                 filteredGroups.push({
                     ...group,
                     entries: filteredEntries,
@@ -307,14 +343,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const timeline = document.createElement('div');
         timeline.className = 'timeline';
         
-        if (filteredGroups.length === 0 && searchTerm !== '') {
+        if (filteredGroups.length === 0 && (searchTerm !== '' || activeFilters.size > 0)) {
             // No matches found
             const noResults = document.createElement('div');
             noResults.className = 'no-results';
             noResults.innerHTML = `
                 <i class="fas fa-search"></i>
-                <p>No entries match "<strong>${escapeHtml(searchTerm)}</strong>"</p>
-                <p style="margin-top: 8px; font-size: 13px;">Try a different search term</p>
+                <p>No entries match your criteria</p>
+                <p style="margin-top: 8px; font-size: 13px;">Try a different search term or clear filters</p>
             `;
             timeline.appendChild(noResults);
         } else {
@@ -331,7 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
         container.appendChild(fragment);
         
         // Update match count
-        const totalEntries = searchTerm !== '' ? data.entries.length : 0;
+        const isFiltering = searchTerm !== '' || activeFilters.size > 0;
+        const totalEntries = isFiltering ? data.entries.length : 0;
         updateSearchCount(totalMatches, totalEntries);
     }
 
@@ -414,7 +451,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'reasoning': 'fa-brain',
             'tool-call': 'fa-wrench',
             'result': 'fa-check-circle',
-            'other': 'fa-circle'
+            'other': 'fa-circle',
+            'error': 'fa-exclamation-triangle',
+            'warning': 'fa-exclamation-circle'
         };
         
         const typeLabelMap = {
@@ -422,7 +461,9 @@ document.addEventListener('DOMContentLoaded', () => {
             'reasoning': 'Reasoning',
             'tool-call': 'Tool',
             'result': 'Result',
-            'other': 'Info'
+            'other': 'Info',
+            'error': 'Error',
+            'warning': 'Warning'
         };
         
         // Highlight message if searching
@@ -475,14 +516,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchCount = document.getElementById('search-count');
         
         if (total === 0) {
-            // No search active
+            // No search/filter active
             searchCount.textContent = '';
             searchCount.className = 'search-count';
         } else if (matches === 0) {
             searchCount.textContent = 'No matches';
             searchCount.className = 'search-count no-matches';
         } else {
-            searchCount.textContent = `${matches} of ${total} entries`;
+            const filterNames = Array.from(activeFilters).map(t => 
+                t.charAt(0).toUpperCase() + t.slice(1)
+            ).join(', ');
+            const filterText = filterNames ? ` (filtered: ${filterNames})` : '';
+            searchCount.textContent = `${matches} of ${total} entries${filterText}`;
             searchCount.className = 'search-count has-matches';
         }
     }
