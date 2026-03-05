@@ -18,10 +18,9 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
-from urllib.error import URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
+import httpx
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
 from rich.console import Console
@@ -210,14 +209,17 @@ def _fetch(_context: Context, url: str, max_bytes: int = 100000) -> str:
         return f"Error fetching {url}: unsupported URL scheme '{parsed.scheme}'"
 
     try:
-        req = Request(url, headers={"User-Agent": "meto/0"})
-        with urlopen(req, timeout=10) as resp:
-            data = resp.read(max_bytes + 1)
-            return truncate(data.decode("utf-8", errors="replace"), max_bytes)
-    except URLError as e:
-        return f"Error fetching {url}: {e}"
-    except TimeoutError:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(url, headers={"User-Agent": "meto/0"})
+            response.raise_for_status()
+            content = response.content[: max_bytes + 1]
+            return truncate(content.decode("utf-8", errors="replace"), max_bytes)
+    except httpx.HTTPStatusError as e:
+        return f"Error fetching {url}: {e.response.status_code} {e.response.reason_phrase}"
+    except httpx.TimeoutException:
         return f"Error fetching {url}: timeout after 10s"
+    except httpx.HTTPError as e:
+        return f"Error fetching {url}: {e}"
     except OSError as ex:
         return f"Error fetching {url}: {ex}"
 
