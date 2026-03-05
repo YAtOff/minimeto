@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TokenUsage(BaseModel):
@@ -41,4 +41,5 @@ class ParsedLogFile(BaseModel):
 
     entries: list[LogEntry]
     token_usage: TokenUsage
+    turn_tokens: dict[int, TokenUsage] = Field(default_factory=dict)
     parse_errors: int  # Count of malformed lines skipped

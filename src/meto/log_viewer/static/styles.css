@@ -90,6 +90,16 @@ header h1 {
     font-size: 14px;
 }
 
+.token-summary .token-total {
+    color: #4da6ff;
+    font-weight: 600;
+    margin-right: 12px;
+}
+
+.token-summary .token-detail {
+    color: #888;
+}
+
 /* === Timeline Layout === */
 
 .timeline {
@@ -120,6 +130,8 @@ header h1 {
 .turn-header {
     position: relative;
     margin-bottom: 15px;
+    display: flex;
+    align-items: center;
 }
 
 /* Circle marker on timeline */
@@ -141,6 +153,24 @@ header h1 {
     font-weight: bold;
     font-size: 0.75rem;
     color: #e2e8f0;
+}
+
+/* Turn tokens display */
+.turn-tokens {
+    margin-left: 12px;
+    font-size: 0.75rem;
+    color: #888;
+}
+
+.turn-tokens .token-prompt {
+    color: #4a9eff;
+}
+
+.turn-tokens .token-cached {
+    color: #22c55e;
+}
+.turn-tokens .token-completion {
+    color: #f59e0b;
 }
 
 .turn-entries {
@@ -301,33 +331,4 @@ header h1 {
 
 .turn-group[data-turn="0"] .turn-number {
     color: #9e9e9e;
-}
-
-/* Legacy level badges (for fallback) */
-.log-entry .level {
-    font-weight: bold;
-    padding: 2px 6px;
-    border-radius: 3px;
-    margin-right: 8px;
-    font-size: 11px;
-}
-
-.log-entry .level.INFO {
-    background-color: #2196f3;
-    color: white;
-}
-
-.log-entry .level.DEBUG {
-    background-color: #666;
-    color: white;
-}
-
-.log-entry .level.WARNING {
-    background-color: #ff9800;
-    color: #1a1a2e;
-}
-
-.log-entry .level.ERROR {
-    background-color: #f44336;
-    color: white;
 }

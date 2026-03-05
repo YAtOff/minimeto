@@ -60,6 +60,45 @@ def aggregate_token_usage(entries: list[LogEntry]) -> TokenUsage:
     return TokenUsage(prompt=prompt, cached=cached, completion=completion)
 
 
+def aggregate_tokens_by_turn(entries: list[LogEntry]) -> dict[int, TokenUsage]:
+    """Aggregate token usage grouped by turn number.
+
+    Token usage messages typically have turn=None, so we track the current turn
+    as we iterate through entries. Tokens are attributed to the most recent turn.
+
+    Args:
+        entries: List of log entries to aggregate.
+
+    Returns:
+        Dict mapping turn number to TokenUsage for that turn.
+    """
+    turn_tokens: dict[int, dict[str, int]] = {}
+    current_turn: int | None = None
+
+    for entry in entries:
+        # Update current turn if this entry has one
+        if entry.turn is not None:
+            current_turn = entry.turn
+
+        # Try to extract tokens
+        tokens = extract_token_usage(entry.message)
+        if tokens is None:
+            continue
+
+        # Skip if we haven't seen a turn yet
+        if current_turn is None:
+            continue
+
+        if current_turn not in turn_tokens:
+            turn_tokens[current_turn] = {"prompt": 0, "cached": 0, "completion": 0}
+
+        turn_tokens[current_turn]["prompt"] += tokens.prompt
+        turn_tokens[current_turn]["cached"] += tokens.cached
+        turn_tokens[current_turn]["completion"] += tokens.completion
+
+    return {turn: TokenUsage(**counts) for turn, counts in turn_tokens.items()}
+
+
 def _parse_datetime(timestamp_str: str) -> datetime:
     """Parse ISO format datetime string.
 
@@ -115,9 +154,11 @@ def parse_log_file(file_path: Path) -> ParsedLogFile:
                 parse_errors += 1
 
     token_usage = aggregate_token_usage(entries)
+    turn_tokens = aggregate_tokens_by_turn(entries)
 
     return ParsedLogFile(
         entries=entries,
         token_usage=token_usage,
+        turn_tokens=turn_tokens,
         parse_errors=parse_errors,
     )

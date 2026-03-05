@@ -106,11 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // === Turn Grouping ===
 
     /**
-     * Group entries by turn number
+     * Group entries by turn number with token usage
      * @param {Array} entries - Array of log entries
+     * @param {Object} turnTokens - Dict mapping turn number (as string) to token usage
      * @returns {Array} Sorted array of turn groups
      */
-    function groupEntriesByTurn(entries) {
+    function groupEntriesByTurn(entries, turnTokens) {
         const turnGroups = {};
         
         entries.forEach(entry => {
@@ -118,9 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const turnKey = `turn-${turnNum}`;
             
             if (!turnGroups[turnKey]) {
+                // JSON serialization converts int keys to strings, so use string lookup
                 turnGroups[turnKey] = {
                     turnNumber: turnNum,
-                    entries: []
+                    entries: [],
+                    tokenUsage: turnTokens[String(turnNum)] || null
                 };
             }
             
@@ -153,8 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
             fragment.appendChild(tokenSummary);
         }
         
-        // Group entries by turn
-        const turnGroups = groupEntriesByTurn(data.entries);
+        // Group entries by turn with token data
+        const turnGroups = groupEntriesByTurn(data.entries, data.turn_tokens || {});
         
         // Build timeline
         const timeline = document.createElement('div');
@@ -175,11 +178,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function createTokenSummary(tokenUsage) {
         const div = document.createElement('div');
         div.className = 'token-summary';
+        const total = tokenUsage.prompt + tokenUsage.completion;
         div.innerHTML = `
             <strong>Token Summary:</strong>
-            Prompt: ${tokenUsage.prompt.toLocaleString()},
-            Cached: ${tokenUsage.cached.toLocaleString()},
-            Completion: ${tokenUsage.completion.toLocaleString()}
+            <span class="token-total">${total.toLocaleString()} total</span>
+            <span class="token-detail">(Prompt: ${tokenUsage.prompt.toLocaleString()}, Cached: ${tokenUsage.cached.toLocaleString()}, Completion: ${tokenUsage.completion.toLocaleString()})</span>
         `;
         return div;
     }
@@ -192,11 +195,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // Turn header with marker
         const header = document.createElement('div');
         header.className = 'turn-header';
-        header.innerHTML = `
-            <div class="turn-marker">
-                <span class="turn-number">${turnGroup.turnNumber === 0 ? 'Init' : turnGroup.turnNumber}</span>
-            </div>
-        `;
+        
+        const marker = document.createElement('div');
+        marker.className = 'turn-marker';
+        marker.innerHTML = `<span class="turn-number">${turnGroup.turnNumber === 0 ? 'Init' : turnGroup.turnNumber}</span>`;
+        header.appendChild(marker);
+        
+        // Add token usage display for this turn
+        if (turnGroup.tokenUsage) {
+            const tokens = document.createElement('span');
+            tokens.className = 'turn-tokens';
+            tokens.innerHTML = `
+                <span class="token-prompt">${turnGroup.tokenUsage.prompt.toLocaleString()} in</span>
+                <span class="token-cached">(${turnGroup.tokenUsage.cached.toLocaleString()} cached)</span>
+                <span class="token-completion">${turnGroup.tokenUsage.completion.toLocaleString()} out</span>
+            `;
+            header.appendChild(tokens);
+        }
+        
+        turnDiv.appendChild(header);
         
         // Entries container
         const entriesDiv = document.createElement('div');
@@ -207,7 +224,6 @@ document.addEventListener('DOMContentLoaded', () => {
             entriesDiv.appendChild(entryElement);
         });
         
-        turnDiv.appendChild(header);
         turnDiv.appendChild(entriesDiv);
         
         return turnDiv;
