@@ -1,8 +1,16 @@
-"""Log viewer module for agent reasoning logs.
+"""Log viewer module for parsing and serving agent reasoning logs."""
 
-Provides models and utilities for parsing and viewing JSONL log files.
-"""
+from meto.log_viewer.models import LogEntry, LogFile, ParsedLogFile, TokenUsage
+from meto.log_viewer.parser import aggregate_token_usage, extract_token_usage, parse_log_file
 
-from meto.log_viewer.models import LogEntry, LogFile, TokenUsage
-
-__all__ = ["LogEntry", "LogFile", "TokenUsage"]
+__all__ = [
+    # Models
+    "LogEntry",
+    "LogFile",
+    "ParsedLogFile",
+    "TokenUsage",
+    # Parser functions
+    "parse_log_file",
+    "extract_token_usage",
+    "aggregate_token_usage",
+]

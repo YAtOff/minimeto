@@ -34,3 +34,11 @@ class LogEntry(BaseModel):
     agent_name: str | None
     turn: int | None
     message: str
+
+
+class ParsedLogFile(BaseModel):
+    """Result of parsing a JSONL log file."""
+
+    entries: list[LogEntry]
+    token_usage: TokenUsage
+    parse_errors: int  # Count of malformed lines skipped
