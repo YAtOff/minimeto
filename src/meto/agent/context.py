@@ -22,6 +22,7 @@ class Context:
     todos: TodoManager
     history: list[dict[str, str | dict[str, Any]]]
     pending_tools: list[PendingTool] = field(default_factory=list)
+    active_skill: str | None = None  # Track currently loaded skill for skill-local agents
     # Add more fields as needed for tools (e.g. session state, config, etc.)
 
     def fork(self) -> "Context":
@@ -30,4 +31,5 @@ class Context:
             todos=self.todos,  # Share the same todo manager for centralized task tracking
             history=[],  # Start with fresh history for subagent
             pending_tools=[],
+            active_skill=self.active_skill,  # Preserve active skill in forks
         )

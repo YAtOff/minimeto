@@ -280,7 +280,8 @@ def _execute_task(
 
     # Run subagent
     try:
-        agent = Agent.subagent(agent_name)
+        # Pass active_skill context to subagent creation
+        agent = Agent.subagent(agent_name, skill_name=context.active_skill)
         output = "\n".join(run_agent_loop(agent, prompt, context.fork()))
         result = truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
     except Exception as ex:
@@ -300,15 +301,68 @@ def _execute_task(
     return result
 
 
-def _load_skill(_context: Context, skill_name: str) -> str:
+def _load_skill(context: Context, skill_name: str) -> str:
     """Load skill content and return it."""
     try:
         skill_loader = get_skill_loader()
-        return skill_loader.get_skill_content(skill_name)
+
+        # Validate skill exists first
+        if not skill_loader.has_skill(skill_name):
+            available = ", ".join(skill_loader.list_skills())
+            return (
+                f"Error: Skill '{skill_name}' not found. Available skills: {available or '(none)'}"
+            )
+
+        # Set active skill in context
+        context.active_skill = skill_name
+
+        # Get skill content
+        content = skill_loader.get_skill_content(skill_name)
+
+        # Add hint about available agents
+        agents = skill_loader.list_skill_agents(skill_name)
+        if agents:
+            agent_list = ", ".join(agents)
+            content += f"\n\n---\n\nThis skill includes the following specialized agents (use load_agent to access them):\n{agent_list}\n"
+
+        return content
     except ValueError as e:
         return f"Error: {e}"
     except OSError as ex:
         return f"Error: Failed to load skill '{skill_name}': {ex}"
+
+
+def _load_agent(context: Context, agent_name: str) -> str:
+    """Load a skill-local agent configuration."""
+    import json
+
+    from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
+
+    # Check if a skill is currently active
+    if not context.active_skill:
+        return "Error: No skill is currently active. Use load_skill first to load a skill, then use load_agent to access its agents."
+
+    try:
+        skill_loader = get_skill_loader()
+        agent_config = skill_loader.get_skill_agent_config(context.active_skill, agent_name)
+
+        # Return as JSON for easy parsing
+        return json.dumps(agent_config, indent=2)
+
+    except SkillAgentNotFoundError as e:
+        # Provide helpful error message with available agents
+        skill_loader = get_skill_loader()
+        available = skill_loader.list_skill_agents(context.active_skill)
+        if available:
+            available_str = ", ".join(available)
+            return f"Error: {e}\nAvailable agents: {available_str}"
+        return f"Error: {e}"
+    except SkillAgentValidationError as e:
+        return f"Error: {e}"
+    except Exception as ex:
+        return (
+            f"Error: Failed to load agent '{agent_name}' from skill '{context.active_skill}': {ex}"
+        )
 
 
 def _search_available_tools(context: Context, query: str, top_k: int = 3) -> str:
@@ -404,6 +458,12 @@ def _handle_load_skill(context: Context, parameters: dict[str, Any]) -> str:
     return _load_skill(context, skill_name)
 
 
+def _handle_load_agent(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle skill-local agent loading."""
+    agent_name = parameters.get("agent_name", "")
+    return _load_agent(context, agent_name)
+
+
 def _handle_search_available_tools(context: Context, parameters: dict[str, Any]) -> str:
     """Handle runtime tool discovery."""
     query = cast(str, parameters.get("query", ""))
@@ -426,6 +486,7 @@ TOOL_LOG_STRATEGY: dict[str, str] = {
     "fetch": "errors_only",
     "grep_search": "errors_only",
     "load_skill": "errors_only",
+    "load_agent": "errors_only",
     "manage_todos": "errors_only",
     "list_dir": "errors_only",
     # Verbose tools - log everything
@@ -449,6 +510,7 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "search_available_tools": _handle_search_available_tools,
     "run_task": _handle_run_task,
     "load_skill": _handle_load_skill,
+    "load_agent": _handle_load_agent,
 }
 
 

@@ -11,6 +11,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypedDict
 
+import yaml
+
+from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
+from meto.agent.loaders.agent_loader import validate_agent_config
 from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
 from meto.conf import settings
 
@@ -100,6 +104,14 @@ class SkillLoader:
             try:
                 # Parse metadata only (lazy loading)
                 content = skill_file.read_text(encoding="utf-8")
+            except (PermissionError, OSError) as e:
+                logger.warning(f"Cannot read skill file {skill_file}: {e}")
+                continue
+            except UnicodeDecodeError as e:
+                logger.warning(f"Cannot decode skill file {skill_file} as UTF-8: {e}")
+                continue
+
+            try:
                 parsed = parse_yaml_frontmatter(content)
                 metadata: dict[str, Any] = parsed["metadata"]  # type: ignore[assignment]
 
@@ -122,8 +134,8 @@ class SkillLoader:
                 }
                 logger.debug(f"Discovered skill '{name}' at {skill_file}")
 
-            except Exception as e:
-                logger.warning(f"Failed to parse skill file {skill_file}: {e}")
+            except (ValueError, KeyError) as e:
+                logger.warning(f"Invalid YAML frontmatter in {skill_file}: {e}")
                 continue
 
     def get_skill_descriptions(self) -> dict[str, str]:
@@ -216,6 +228,118 @@ class SkillLoader:
             True if skill exists, False otherwise
         """
         return skill_name in self._skills
+
+    def get_skill_agents_dir(self, skill_name: str) -> Path | None:
+        """Get the agents directory for a skill if it exists.
+
+        Args:
+            skill_name: Name of the skill
+
+        Returns:
+            Path to agents directory, or None if it doesn't exist
+        """
+        if skill_name not in self._skills:
+            return None
+
+        skill_file = self._skills[skill_name]["path"]
+        skill_dir = skill_file.parent
+        agents_dir = skill_dir / "agents"
+
+        if agents_dir.is_dir():
+            return agents_dir
+        return None
+
+    def list_skill_agents(self, skill_name: str) -> list[str]:
+        """List available agents for a specific skill.
+
+        Args:
+            skill_name: Name of the skill
+
+        Returns:
+            List of agent names (without .md extension)
+        """
+        agents_dir = self.get_skill_agents_dir(skill_name)
+        if not agents_dir:
+            return []
+
+        agents = []
+        for agent_file in sorted(agents_dir.glob("*.md")):
+            if agent_file.is_file():
+                agents.append(agent_file.stem)
+        return agents
+
+    def get_skill_agent_config(self, skill_name: str, agent_name: str) -> dict[str, Any]:
+        """Load configuration for a skill-local agent.
+
+        Args:
+            skill_name: Name of the skill
+            agent_name: Name of the agent (without .md extension)
+
+        Returns:
+            Agent configuration dict with keys: name, description, tools, prompt
+
+        Raises:
+            SkillAgentNotFoundError: If the skill or agent file doesn't exist
+            SkillAgentValidationError: If the agent configuration is invalid
+        """
+        # Check skill exists
+        if skill_name not in self._skills:
+            available = ", ".join(sorted(self._skills.keys()))
+            raise SkillAgentNotFoundError(
+                f"Skill '{skill_name}' not found. Available skills: {available or '(none)'}"
+            )
+
+        # Get agents directory
+        agents_dir = self.get_skill_agents_dir(skill_name)
+        if not agents_dir:
+            raise SkillAgentNotFoundError(
+                f"Skill '{skill_name}' has no agents directory (expected {skill_name}/agents/)"
+            )
+
+        # Check agent file exists
+        agent_file = agents_dir / f"{agent_name}.md"
+        if not agent_file.is_file():
+            available = ", ".join(self.list_skill_agents(skill_name))
+            raise SkillAgentNotFoundError(
+                f"Agent '{agent_name}' not found in skill '{skill_name}'. "
+                f"Available agents: {available or '(none)'}"
+            )
+
+        # Read and parse the agent file
+        try:
+            content = agent_file.read_text(encoding="utf-8")
+        except (PermissionError, OSError) as e:
+            raise SkillAgentNotFoundError(f"Cannot read agent file {agent_file}: {e}") from e
+        except UnicodeDecodeError as e:
+            raise SkillAgentValidationError(
+                f"Cannot decode agent file {agent_file} as UTF-8: {e}"
+            ) from e
+
+        try:
+            parsed = parse_yaml_frontmatter(content)
+            metadata = parsed["metadata"]
+            body = parsed["body"]
+        except (ValueError, KeyError, yaml.YAMLError) as e:
+            raise SkillAgentValidationError(f"Invalid YAML frontmatter in {agent_file}: {e}") from e
+
+        # Build agent config (same structure as AgentConfig)
+        config = {
+            "name": metadata.get("name", agent_name),
+            "description": metadata.get("description", ""),
+            "tools": metadata.get("tools", []),
+            "prompt": metadata.get("prompt", body),
+        }
+
+        # Validate using the same validation as global agents
+        errors = validate_agent_config(config)
+        if errors:
+            error_msg = (
+                f"Agent '{agent_name}' in skill '{skill_name}' has validation errors: "
+                + "; ".join(errors)
+            )
+            raise SkillAgentValidationError(error_msg)
+
+        return config
 
 
 @lru_cache(maxsize=16)

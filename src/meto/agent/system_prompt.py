@@ -50,6 +50,13 @@ SKILLS_SECTION = """Skills (via load_skill tool):
 {skills_list}
 """
 
+SKILL_AGENTS_SECTION = """Skill-local Agents (via load_agent + run_task):
+- Skills can provide specialized subagents for domain-specific tasks
+- Use load_agent to inspect agent configuration
+- Use run_task with agent_name to execute
+- Only available after loading the parent skill via load_skill
+"""
+
 
 class SystemPromptBuilder:
     """Fluent builder for constructing system prompts."""
@@ -121,6 +128,7 @@ class SystemPromptBuilder:
             SYSTEM_PROMPT.format(cwd=os.fspath(Path.cwd())).rstrip(),
             self.render_subagents(),
             self.render_skills(),
+            SKILL_AGENTS_SECTION if self._is_enabled("skills") else "",
             self.render_todo_manager(),
             self.render_agent_prompt(agent_prompt),
             self.render_agentsmd(),

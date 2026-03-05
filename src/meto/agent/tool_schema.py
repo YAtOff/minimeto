@@ -315,6 +315,34 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "load_agent",
+            "description": (
+                "Load a skill-local agent configuration. "
+                "Agents defined in a skill's agents/ subfolder are domain-specific subagents. "
+                "This loads the agent configuration - use run_task to execute it. "
+                "Only works when a skill has been loaded via load_skill.\n\n"
+                "Example workflow:\n"
+                "1. load_skill('python') - Load the python skill\n"
+                "2. load_agent('reviewer') - Load the reviewer agent from the python skill\n"
+                "3. run_task('reviewer', 'review this code') - Execute the reviewer agent\n\n"
+                "Skill-local agents have specialized tool permissions and prompts for their domain."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_name": {
+                        "type": "string",
+                        "description": "Name of the skill-local agent to load (filename without .md extension)",
+                    },
+                },
+                "required": ["agent_name"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 TOOLS_BY_NAME = {tool["function"]["name"]: tool for tool in TOOLS}

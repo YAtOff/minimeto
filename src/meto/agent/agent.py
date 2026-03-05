@@ -84,7 +84,7 @@ class Agent:
         )
 
     @classmethod
-    def subagent(cls, name: str) -> Agent:
+    def subagent(cls, name: str, skill_name: str | None = None) -> Agent:
         """Create an isolated subagent.
 
         Subagents run with a fresh context and a stricter
@@ -92,8 +92,27 @@ class Agent:
 
         Args:
             name: Name of the agent to create
+            skill_name: Optional skill name for skill-local agents
         """
+        from meto.agent.exceptions import SkillAgentNotFoundError
+        from meto.agent.loaders.skill_loader import get_skill_loader
 
+        # If skill_name provided, try skill-local agent first
+        if skill_name:
+            skill_loader = get_skill_loader()
+            try:
+                agent_config = skill_loader.get_skill_agent_config(skill_name, name)
+                return cls(
+                    name=name,
+                    prompt=agent_config["prompt"],
+                    allowed_tools=agent_config["tools"],
+                    max_turns=settings.SUBAGENT_MAX_TURNS,
+                )
+            except SkillAgentNotFoundError:
+                # Fall through to global agents
+                pass
+
+        # Fall back to global agents
         agents = get_agents()
         agent_config = agents.get(name)
 

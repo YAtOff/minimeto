@@ -23,3 +23,11 @@ class ToolNotFoundError(AgentError):
 
 class AgentInterrupted(AgentError):
     """Raised when the agent loop is interrupted by user (Ctrl-C)."""
+
+
+class SkillAgentNotFoundError(AgentError):
+    """Raised when a skill-local agent is not found."""
+
+
+class SkillAgentValidationError(AgentError):
+    """Raised when a skill-local agent fails validation."""
