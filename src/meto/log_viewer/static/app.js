@@ -1,9 +1,46 @@
 // Meto Log Viewer - Frontend JavaScript
 
+/**
+ * @typedef {Object} LogEntry
+ * @property {string} message
+ * @property {number|null} turn
+ * @property {string} timestamp
+ * @property {string|null} agent_name
+ * @property {string} level
+ * @property {string} type
+ */
+
+/**
+ * @typedef {Object} TurnGroup
+ * @property {number} turnNumber
+ * @property {LogEntry[]} entries
+ * @property {{prompt: number, cached: number, completion: number}|null} tokenUsage
+ * @property {boolean} [hasMatches]
+ */
+
+/**
+ * @typedef {Object} LogData
+ * @property {LogEntry[]} entries
+ * @property {{prompt: number, cached: number, completion: number}|null} token_usage
+ * @property {Object<string, {prompt: number, cached: number, completion: number}>} turn_tokens
+ */
+
 document.addEventListener('DOMContentLoaded', () => {
     const logFileSelect = document.getElementById('log-file');
     const refreshBtn = document.getElementById('refresh-btn');
     const logContent = document.getElementById('log-content');
+
+    // === Search State ===
+    /** @type {string} */
+    let currentSearchTerm = '';
+
+    /** @type {number|null} */
+    let searchDebounceTimer = null;
+
+    const SEARCH_DEBOUNCE_MS = 150;
+
+    /** @type {LogData|null} */
+    let currentLogData = null;
 
     // Load log files on page load
     loadLogFiles();
@@ -13,6 +50,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.value) {
             loadLogFile(e.target.value);
         } else {
+            // Hide search container and reset state
+            document.getElementById('search-container').style.display = 'none';
+            document.getElementById('search-input').value = '';
+            currentSearchTerm = '';
+            currentLogData = null;
+            
             logContent.innerHTML = '<p class="placeholder">Select a log file to view its contents.</p>';
         }
     });
@@ -21,6 +64,38 @@ document.addEventListener('DOMContentLoaded', () => {
         loadLogFiles();
         if (logFileSelect.value) {
             loadLogFile(logFileSelect.value);
+        }
+    });
+
+    // === Search Functionality ===
+
+    const searchContainer = document.getElementById('search-container');
+    const searchInput = document.getElementById('search-input');
+    const searchClearBtn = document.getElementById('search-clear-btn');
+
+    // Search input with debounce
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+            handleSearch(e.target.value);
+        }, SEARCH_DEBOUNCE_MS);
+    });
+
+    // Clear button
+    searchClearBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        handleSearch('');
+        searchInput.focus();
+    });
+
+    // Keyboard shortcut: Ctrl+F to focus search
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            if (searchContainer.style.display !== 'none') {
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.select();
+            }
         }
     });
 
@@ -139,40 +214,125 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // === Rendering ===
 
+    /**
+     * Display log content (entry point)
+     * Stores data for search filtering and shows search UI
+     * @param {LogData} data - Log data from API
+     */
     function displayLogContent(data) {
+        // Store for search filtering
+        currentLogData = data;
+        
+        // Show search container
+        document.getElementById('search-container').style.display = 'flex';
+        
+        // Clear any existing search
+        document.getElementById('search-input').value = '';
+        currentSearchTerm = '';
+        
+        // Render (no filter)
+        displayLogContentFiltered(data, '');
+    }
+
+    /**
+     * Handle search input changes
+     * @param {string} searchTerm - The search term
+     */
+    function handleSearch(searchTerm) {
+        currentSearchTerm = searchTerm.trim().toLowerCase();
+        
+        if (!currentLogData) return;
+        
+        // Re-render with filter
+        displayLogContentFiltered(currentLogData, currentSearchTerm);
+    }
+
+    /**
+     * Display log content with optional filtering
+     * @param {LogData} data - Log data object
+     * @param {string} searchTerm - Search term for filtering (empty = show all)
+     */
+    function displayLogContentFiltered(data, searchTerm) {
         const container = document.getElementById('log-content');
         
         if (!data.entries || data.entries.length === 0) {
             container.innerHTML = '<p class="placeholder">No entries found in this log file.</p>';
+            updateSearchCount(0, 0);
             return;
         }
 
         // Create container for all content
         const fragment = document.createDocumentFragment();
         
-        // Token summary at top
+        // Token summary at top (unchanged by filtering)
         if (data.token_usage) {
             const tokenSummary = createTokenSummary(data.token_usage);
             fragment.appendChild(tokenSummary);
         }
         
-        // Group entries by turn with token data
+        // Group entries by turn
         const turnGroups = groupEntriesByTurn(data.entries, data.turn_tokens || {});
+        
+        // Filter and count matches
+        let totalMatches = 0;
+        const filteredGroups = [];
+        
+        turnGroups.forEach(group => {
+            const filteredEntries = [];
+            let groupHasMatches = false;
+            
+            group.entries.forEach(entry => {
+                const matches = searchTerm === '' || 
+                    entry.message.toLowerCase().includes(searchTerm);
+                
+                if (matches) {
+                    filteredEntries.push(entry);
+                    groupHasMatches = true;
+                    if (searchTerm !== '') {
+                        totalMatches++;
+                    }
+                }
+            });
+            
+            if (searchTerm === '' || groupHasMatches) {
+                filteredGroups.push({
+                    ...group,
+                    entries: filteredEntries,
+                    hasMatches: groupHasMatches
+                });
+            }
+        });
         
         // Build timeline
         const timeline = document.createElement('div');
         timeline.className = 'timeline';
         
-        turnGroups.forEach(group => {
-            const turnElement = createTurnElement(group);
-            timeline.appendChild(turnElement);
-        });
+        if (filteredGroups.length === 0 && searchTerm !== '') {
+            // No matches found
+            const noResults = document.createElement('div');
+            noResults.className = 'no-results';
+            noResults.innerHTML = `
+                <i class="fas fa-search"></i>
+                <p>No entries match "<strong>${escapeHtml(searchTerm)}</strong>"</p>
+                <p style="margin-top: 8px; font-size: 13px;">Try a different search term</p>
+            `;
+            timeline.appendChild(noResults);
+        } else {
+            filteredGroups.forEach(group => {
+                const turnElement = createTurnElementFiltered(group, searchTerm);
+                timeline.appendChild(turnElement);
+            });
+        }
         
         fragment.appendChild(timeline);
         
         // Clear and render
         container.innerHTML = '';
         container.appendChild(fragment);
+        
+        // Update match count
+        const totalEntries = searchTerm !== '' ? data.entries.length : 0;
+        updateSearchCount(totalMatches, totalEntries);
     }
 
     function createTokenSummary(tokenUsage) {
@@ -187,10 +347,20 @@ document.addEventListener('DOMContentLoaded', () => {
         return div;
     }
 
-    function createTurnElement(turnGroup) {
+    /**
+     * Create turn element with filtering support
+     * @param {TurnGroup} turnGroup - Turn group data
+     * @param {string} searchTerm - Current search term
+     * @returns {HTMLElement}
+     */
+    function createTurnElementFiltered(turnGroup, searchTerm) {
         const turnDiv = document.createElement('div');
         turnDiv.className = 'turn-group';
         turnDiv.setAttribute('data-turn', turnGroup.turnNumber);
+        
+        if (!turnGroup.hasMatches && searchTerm !== '') {
+            turnDiv.classList.add('partial-match');
+        }
         
         // Turn header with marker
         const header = document.createElement('div');
@@ -201,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
         marker.innerHTML = `<span class="turn-number">${turnGroup.turnNumber === 0 ? 'Init' : turnGroup.turnNumber}</span>`;
         header.appendChild(marker);
         
-        // Add token usage display for this turn
+        // Token usage (unchanged - shows original turn tokens)
         if (turnGroup.tokenUsage) {
             const tokens = document.createElement('span');
             tokens.className = 'turn-tokens';
@@ -220,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         entriesDiv.className = 'turn-entries';
         
         turnGroup.entries.forEach(entry => {
-            const entryElement = createEntryElement(entry);
+            const entryElement = createEntryElementFiltered(entry, searchTerm);
             entriesDiv.appendChild(entryElement);
         });
         
@@ -229,7 +399,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return turnDiv;
     }
 
-    function createEntryElement(entry) {
+    /**
+     * Create entry element with search highlighting
+     * @param {LogEntry} entry - Log entry
+     * @param {string} searchTerm - Current search term
+     * @returns {HTMLElement}
+     */
+    function createEntryElementFiltered(entry, searchTerm) {
         const entryDiv = document.createElement('div');
         entryDiv.className = `log-entry entry-${entry.type}`;
         
@@ -249,6 +425,11 @@ document.addEventListener('DOMContentLoaded', () => {
             'other': 'Info'
         };
         
+        // Highlight message if searching
+        const messageHtml = searchTerm !== '' 
+            ? highlightText(escapeHtml(entry.message), searchTerm)
+            : escapeHtml(entry.message);
+        
         entryDiv.innerHTML = `
             <span class="entry-icon">
                 <i class="fas ${iconMap[entry.type]}"></i>
@@ -259,11 +440,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span class="timestamp">${formatDate(entry.timestamp)}</span>
                     ${entry.agent_name ? `<span class="agent">[${entry.agent_name}]</span>` : ''}
                 </div>
-                <div class="message">${escapeHtml(entry.message)}</div>
+                <div class="message">${messageHtml}</div>
             </div>
         `;
         
         return entryDiv;
+    }
+
+    /**
+     * Highlight search term in text (case-insensitive)
+     * IMPORTANT: Text must already be HTML-escaped before calling this function
+     * @param {string} text - Already escaped HTML text
+     * @param {string} searchTerm - Search term to highlight
+     * @returns {string} Text with <span class="highlight"> wrapped matches
+     */
+    function highlightText(text, searchTerm) {
+        if (!searchTerm) return text;
+        
+        // Escape special regex characters in search term
+        const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Case-insensitive match
+        const regex = new RegExp(`(${escapedTerm})`, 'gi');
+        
+        return text.replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    /**
+     * Update search match count display
+     * @param {number} matches - Number of matching entries
+     * @param {number} total - Total entries (only shown when filtering)
+     */
+    function updateSearchCount(matches, total) {
+        const searchCount = document.getElementById('search-count');
+        
+        if (total === 0) {
+            // No search active
+            searchCount.textContent = '';
+            searchCount.className = 'search-count';
+        } else if (matches === 0) {
+            searchCount.textContent = 'No matches';
+            searchCount.className = 'search-count no-matches';
+        } else {
+            searchCount.textContent = `${matches} of ${total} entries`;
+            searchCount.className = 'search-count has-matches';
+        }
     }
 
     // === Utility Functions ===

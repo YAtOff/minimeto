@@ -68,6 +68,86 @@ header h1 {
     background-color: #6db8ff;
 }
 
+/* === Search Container === */
+
+.search-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #16213e;
+    border-radius: 8px;
+}
+
+.search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+}
+
+.search-icon {
+    color: #666;
+    font-size: 14px;
+    position: absolute;
+    left: 12px;
+}
+
+.search-input {
+    flex: 1;
+    padding: 10px 12px 10px 36px;
+    background-color: #1a1a2e;
+    color: #eee;
+    border: 1px solid #333;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #4da6ff;
+}
+
+.search-input::placeholder {
+    color: #666;
+}
+
+.search-clear-btn {
+    padding: 8px 12px;
+    background-color: transparent;
+    color: #888;
+    border: 1px solid #333;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.search-clear-btn:hover {
+    color: #eee;
+    border-color: #666;
+}
+
+.search-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 20px;
+}
+
+.search-count {
+    font-size: 13px;
+    color: #888;
+}
+
+.search-count.has-matches {
+    color: #4caf50;
+}
+
+.search-count.no-matches {
+    color: #f44336;
+}
+
 #log-content {
     background-color: #16213e;
     border-radius: 8px;
@@ -331,4 +411,59 @@ header h1 {
 
 .turn-group[data-turn="0"] .turn-number {
     color: #9e9e9e;
+}
+
+/* === Search Highlighting === */
+
+.highlight {
+    background-color: #ffeb3b;
+    color: #000;
+    padding: 1px 2px;
+    border-radius: 2px;
+    font-weight: 500;
+}
+
+/* Dark theme optimized highlight - more visible */
+.entry-reasoning .highlight,
+.entry-other .highlight {
+    background-color: #fff176;
+}
+
+/* Ensure highlighted text is readable in all contexts */
+.entry-user-input .highlight {
+    background-color: #ffeb3b;
+}
+
+.entry-tool-call .highlight {
+    background-color: #ffe082;
+}
+
+.entry-result .highlight {
+    background-color: #c5e1a5;
+}
+
+/* === Filtered State === */
+
+/* Hide turns with no matching entries */
+.turn-group.filtered-hidden {
+    display: none;
+}
+
+/* Visual indicator for partially matched turns */
+.turn-group.partial-match .turn-marker {
+    border-color: #4da6ff;
+}
+
+/* No results message */
+.no-results {
+    text-align: center;
+    padding: 40px;
+    color: #888;
+}
+
+.no-results i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    display: block;
+    color: #555;
 }

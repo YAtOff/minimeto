@@ -20,6 +20,25 @@
                 </select>
                 <button id="refresh-btn">Refresh</button>
             </div>
+            <div class="search-container" id="search-container" style="display: none;">
+                <div class="search-input-wrapper">
+                    <i class="fas fa-search search-icon"></i>
+                    <input 
+                        type="text" 
+                        id="search-input" 
+                        class="search-input" 
+                        placeholder="Search entries..."
+                        aria-label="Search log entries"
+                        autocomplete="off"
+                    >
+                    <button id="search-clear-btn" class="search-clear-btn" title="Clear search" aria-label="Clear search">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="search-info">
+                    <span id="search-count" class="search-count" aria-live="polite"></span>
+                </div>
+            </div>
             <div id="log-content">
                 <p class="placeholder">Select a log file to view its contents.</p>
             </div>
