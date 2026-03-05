@@ -11,7 +11,7 @@ from prompt_toolkit.enums import EditingMode
 
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
-from meto.agent.command import execute_chat_command
+from meto.agent.command import NewSessionException, execute_chat_command
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted
 from meto.agent.mcp_client import initialize_mcp_registry
@@ -70,6 +70,9 @@ def interactive_loop(session: Session) -> None:
 
         try:
             _run_single_prompt(user_input, session)
+        except NewSessionException:
+            session = Session.new()
+            print(f"[New session: {session.session_id}]", flush=True)
         except typer.Exit:
             return
 

@@ -12,6 +12,12 @@ if TYPE_CHECKING:
     from meto.agent.session import Session
 
 
+class NewSessionException(Exception):
+    """Signal to create a new session with fresh context."""
+
+    pass
+
+
 @click.group()
 @click.pass_context
 def chat_commands(ctx: "Context"):
@@ -72,6 +78,13 @@ def help(ctx: "Context"):  # pyright: ignore[reportShadowingBuiltins]
     echo(chat_commands.get_help(ctx))
 
 
+@chat_commands.command()
+@click.pass_context
+def new(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+    """Start a new session with fresh context."""
+    raise NewSessionException
+
+
 def execute_chat_command(cmdline: str, session: "Session") -> tuple[bool, str]:
     """Execute chat command with session access.
 
@@ -97,3 +110,5 @@ def execute_chat_command(cmdline: str, session: "Session") -> tuple[bool, str]:
         return True, str(e)
     except typer.Exit:
         raise  # Propagate Exit to terminate REPL
+    except NewSessionException:
+        raise  # Propagate to create new session
