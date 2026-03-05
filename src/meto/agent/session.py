@@ -84,6 +84,21 @@ class SessionLogger:
         }
         self._append(msg)
 
+    def log_compact(self, summary: str) -> None:
+        """Log compact marker with summary.
+
+        When a session is reloaded, all messages before the last compact
+        marker will be skipped, reducing memory usage while preserving
+        full history on disk.
+        """
+        msg = {
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+            "role": "compact",
+            "summary": summary,
+            "session_id": self.session_id,
+        }
+        self._append(msg)
+
 
 class SessionHistory(list[dict[str, Any]]):
     """List that auto-logs appends to session_logger."""
@@ -107,6 +122,10 @@ class SessionHistory(list[dict[str, Any]]):
         elif role == "tool":
             self._session_logger.log_tool(item["tool_call_id"], item["content"])
 
+    def log_compact(self, summary: str) -> None:
+        """Log a compact marker via the session logger."""
+        self._session_logger.log_compact(summary)
+
 
 class Session:
     """Wraps session_id, history and session_logger for unified session management."""
@@ -117,7 +136,11 @@ class Session:
 
     @classmethod
     def load(cls, session_id: str, session_dir: Path = settings.SESSION_DIR) -> Session:
-        """Load session by ID, returning Session instance."""
+        """Load session by ID, returning Session instance.
+
+        If a compact marker exists in the session file, only messages after
+        the last compact marker are loaded. The full history is preserved on disk.
+        """
 
         session_file = session_dir / f"session-{session_id}.jsonl"
 
@@ -126,24 +149,54 @@ class Session:
 
         info = {}
         messages = []
+        last_compact_index = -1
+
+        # First pass: read all lines and find last compact marker
         try:
+            lines: list[tuple[int, dict[str, Any]]] = []
             with open(session_file, encoding="utf-8") as f:
                 for i, line in enumerate(f):
                     if line.strip():
-                        raw = json.loads(line)
-                        if i == 0:
-                            info = {
-                                "working_dir": raw.get("working_dir", os.fspath(Path.cwd())),
-                            }
+                        try:
+                            raw = json.loads(line)
+                            lines.append((i, raw))
+                            if raw.get("role") == "compact":
+                                last_compact_index = i
+                        except json.JSONDecodeError:
+                            logger.warning(f"Skipping malformed line {i} in session {session_id}")
                             continue
-                        # Extract OpenAI message format, strip metadata
-                        msg: dict[str, Any] = {"role": raw["role"], "content": raw.get("content")}
-                        if "tool_calls" in raw:
-                            msg["tool_calls"] = raw["tool_calls"]
-                        if "tool_call_id" in raw:
-                            msg["tool_call_id"] = raw["tool_call_id"]
-                        messages.append(msg)
-        except (OSError, json.JSONDecodeError) as e:
+
+            # Second pass: extract messages (skip header + pre-compact messages)
+            for i, raw in lines:
+                if i == 0:
+                    info = {
+                        "working_dir": raw.get("working_dir", os.fspath(Path.cwd())),
+                    }
+                    continue
+
+                # Skip messages before the last compact marker
+                if last_compact_index >= 0 and i <= last_compact_index:
+                    continue
+
+                # Skip compact markers themselves
+                if raw.get("role") == "compact":
+                    continue
+
+                # Extract OpenAI message format, strip metadata
+                msg: dict[str, Any] = {"role": raw["role"], "content": raw.get("content")}
+                if "tool_calls" in raw:
+                    msg["tool_calls"] = raw["tool_calls"]
+                if "tool_call_id" in raw:
+                    msg["tool_call_id"] = raw["tool_call_id"]
+                messages.append(msg)
+
+            if last_compact_index >= 0:
+                logger.info(
+                    f"Session {session_id}: compact marker at line {last_compact_index}, "
+                    f"loading {len(messages)} messages after compact"
+                )
+
+        except OSError as e:
             logger.error(f"Failed to load session {session_id}: {e}")
             return cls.new()
 
@@ -177,3 +230,14 @@ class Session:
         self.session_id = session_id
         self.working_dir = working_dir
         self.history = history
+
+    def compact(self, summary: str) -> None:
+        """Log a compact marker to truncate history on next load.
+
+        Args:
+            summary: Human-readable summary of the conversation so far
+
+        The full history is preserved on disk, but when this session is
+        reloaded, messages before this marker will be skipped.
+        """
+        self.history.log_compact(summary)

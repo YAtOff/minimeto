@@ -111,6 +111,18 @@ class Settings(BaseSettings):
         description="Enable permission checks for sensitive operations (shell, fetch, file access outside CWD).",
     )
 
+    # --- Session Compaction ---
+
+    COMPACT_SUMMARY_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="Model to use for generating /compact summaries.",
+    )
+
+    COMPACT_SUMMARY_MAX_CHARS: int = Field(
+        default=15000,
+        description="Max characters of history to send for summarization.",
+    )
+
     # --- Logging ---
 
     LOG_DIR: Path = Field(
