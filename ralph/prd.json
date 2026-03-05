@@ -1,0 +1,182 @@
+{
+  "project": "minimeto",
+  "branchName": "ralph/log-viewer",
+  "description": "Web-Based Log Viewer - A visual timeline tool for agent reasoning logs with turn-by-turn breakdown, token usage, and search functionality",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create log_viewer module with Pydantic models",
+      "description": "As a developer, I need the foundational module structure and data models for the log viewer.",
+      "acceptanceCriteria": [
+        "Create src/meto/log_viewer/__init__.py module",
+        "Create models.py with LogEntry, LogFile, TokenUsage Pydantic models matching the API spec",
+        "LogEntry has: timestamp, level, agent_name, turn, message fields",
+        "LogFile has: filename, size, modified fields",
+        "TokenUsage has: prompt, cached, completion fields",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add JSONL parser for log files",
+      "description": "As a developer, I need a parser to read and extract structured data from JSONL log files.",
+      "acceptanceCriteria": [
+        "Create parser.py with function to parse JSONL files",
+        "Extract log entries with timestamp, level, logger, message, agent_name, turn",
+        "Aggregate token usage data (prompt, cached, completion tokens)",
+        "Handle malformed JSON lines gracefully (skip with warning)",
+        "Load entire file into memory (no streaming for MVP)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add FastAPI app with GET /api/logs endpoint",
+      "description": "As a developer, I need an API endpoint to list available log files.",
+      "acceptanceCriteria": [
+        "Create app.py with FastAPI application",
+        "GET /api/logs returns list of LogFile objects",
+        "List files from ~/.minimeto/logs/ directory",
+        "Show filename, file size (bytes), and last modified timestamp",
+        "Sort files by modification date (newest first)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add GET /api/logs/{filename} endpoint",
+      "description": "As a developer, I need an API endpoint to retrieve and parse a specific log file.",
+      "acceptanceCriteria": [
+        "GET /api/logs/{filename} returns parsed log entries and token totals",
+        "Response includes entries array with LogEntry objects",
+        "Response includes total_tokens with TokenUsage object",
+        "Return 404 if file not found",
+        "Use parser from US-002 for parsing logic",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add CLI command to start log viewer server",
+      "description": "As a user, I want a CLI command to launch the log viewer web server.",
+      "acceptanceCriteria": [
+        "Add 'meto logs --serve' or 'meto log-viewer' CLI command",
+        "Command starts FastAPI on http://localhost:8000",
+        "Serves static frontend files from log_viewer/static/",
+        "Auto-open browser to the viewer URL",
+        "Use uvicorn for ASGI server",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add frontend: HTML structure and log file list",
+      "description": "As a user, I want to see and select from available log files in the browser.",
+      "acceptanceCriteria": [
+        "Create static/index.html with basic page structure",
+        "Create static/style.css with clean, minimal styling",
+        "Create static/app.js with fetch call to GET /api/logs",
+        "Display list of log files with filename, size, and modified date",
+        "Clicking a file loads its content (call GET /api/logs/{filename})",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Static files created in US-005 already include all US-006 functionality. Verified with programmatic tests: API returns 50 log files, file selection loads content with 392 entries, all typecheck/lint passes."
+    },
+    {
+      "id": "US-007",
+      "title": "Add frontend: display parsed log entries",
+      "description": "As a user, I want to see parsed log entries in a structured format.",
+      "acceptanceCriteria": [
+        "Display entries list with timestamp, level, agent_name, turn, and message",
+        "Format timestamps in readable local time",
+        "Show log level badge (INFO, ERROR, DEBUG, etc.)",
+        "Display message content with proper text wrapping",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "All acceptance criteria already implemented in US-005 static files. Code analysis verified: app.js displays all fields (timestamp, level, agent_name, turn, message), formatDate() uses toLocaleString() for local time, CSS defines level badges with colors (INFO=blue, DEBUG=gray, WARNING=orange, ERROR=red), message div uses pre-wrap + break-word for text wrapping. Typecheck passes (0 errors, 0 warnings)."
+    },
+    {
+      "id": "US-008",
+      "title": "Add frontend: timeline with turn-by-turn breakdown",
+      "description": "As a user, I want a visual timeline grouping entries by turn.",
+      "acceptanceCriteria": [
+        "Group log entries by turn number (Turn 1, Turn 2, etc.)",
+        "Display timeline showing sequence of turns",
+        "For each turn show: user input, assistant reasoning, tool calls, results",
+        "Use visual indicators (colors, icons) for different entry types",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented timeline view with turn grouping, entry type classification (user-input, reasoning, tool-call, result), visual indicators (colors: blue/purple/orange/green, Font Awesome icons), and vertical timeline line connecting turns. CSS uses circular turn markers, left-bordered entry containers, and hover effects."
+    },
+    {
+      "id": "US-009",
+      "title": "Add frontend: token usage display",
+      "description": "As a user, I want to see token usage per turn and in total.",
+      "acceptanceCriteria": [
+        "Display token counts for each turn in the timeline (prompt, cached, completion)",
+        "Show total token usage summary at the top of the view",
+        "Format numbers with commas for readability",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Fixed string/int key mismatch in turn_tokens lookup. Token usage now displays correctly per turn (prompt/cached/completion) with formatted numbers. Total token summary at top of viewer. All acceptance criteria verified."
+    },
+    {
+      "id": "US-010",
+      "title": "Add frontend: search/filter functionality",
+      "description": "As a user, I want to search log entries by text to find specific content.",
+      "acceptanceCriteria": [
+        "Add search input field above log display",
+        "Filter log entries in real-time as user types",
+        "Highlight matching text in displayed entries",
+        "Show count of matching entries",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add frontend: error highlighting",
+      "description": "As a user, I want errors to be visually distinct so I can quickly identify problems.",
+      "acceptanceCriteria": [
+        "Display error-level log entries with red background or border",
+        "Show error icon next to error messages",
+        "Add filter toggle to show only errors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

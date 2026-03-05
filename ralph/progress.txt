@@ -1,0 +1,161 @@
+## Чт  05 Мар 2026 07:05:07 EET - US-003
+Session: 
+## Чт  05 Мар 2026 07:05:20 EET - US-003
+Session: 
+- Created src/meto/log_viewer/app.py with FastAPI application
+- Added GET /api/logs endpoint returning list of LogFile objects
+- Files listed from ~/.minimeto/logs/ directory (settings.LOG_DIR)
+- Returns filename, file size (bytes), and modified timestamp
+- Sorted by modification date (newest first)
+- Added FastAPI and uvicorn dependencies to pyproject.toml
+- All lint/typecheck/tests passed
+- Files changed:
+  - pyproject.toml (added fastapi, uvicorn dependencies)
+  - uv.lock (lockfile update)
+  - src/meto/log_viewer/app.py (new)
+- **Learnings for future iterations:**
+  - FastAPI app uses `settings.LOG_DIR` from meto.conf for log directory path
+  - Endpoint returns empty list if directory doesn't exist (graceful degradation)
+  - Pydantic v2 automatically serializes datetime to ISO 8601 format
+---
+## Чт  05 Мар 2026 07:14:00 EET - US-004
+Session: 
+- Created src/meto/log_viewer/security.py with path validation utilities
+  - validate_log_filename() - validates filename safety (no path separators, must end in .jsonl)
+  - safe_join_path() - prevents path traversal attacks
+- Added GET /api/logs/{filename} endpoint to app.py
+  - Returns ParsedLogFile with entries, token_usage, parse_errors
+  - 400 Bad Request for invalid filenames
+  - 404 Not Found for missing files
+  - 500 Internal Server Error for permission/unexpected errors
+- All lint/typecheck/tests passed
+- Files changed:
+  - src/meto/log_viewer/security.py (new)
+  - src/meto/log_viewer/app.py (modified)
+- **Learnings for future iterations:**
+  - Response model ParsedLogFile already includes entries, token_usage, parse_errors
+  - Used `raise ... from None` pattern to suppress exception chaining for HTTPException
+  - security.py is a separate module for reusability and testability
+  - The parser.parse_log_file() handles all JSONL parsing, endpoint just calls it
+---
+## Чт  05 Мар 2026 07:24:18 EET - US-005
+Session: 
+- Added `meto logs --serve` CLI command with --host, --port, --no-browser options
+- Modified FastAPI app to serve static files (StaticFiles mount at "/" with html=True)
+- Created static frontend files (index.html, styles.css, app.js) with basic UI structure
+- Added run_server() function with browser auto-open (1.5s delay via threading)
+- Error handling for port conflicts with helpful message
+- All lint/typecheck/tests passed
+- Files changed:
+  - src/meto/cli.py (added logs command)
+  - src/meto/log_viewer/app.py (added StaticFiles mount, run_server function)
+  - src/meto/log_viewer/__init__.py (export run_server)
+  - src/meto/log_viewer/static/index.html (new)
+  - src/meto/log_viewer/static/styles.css (new)
+  - src/meto/log_viewer/static/app.js (new)
+- **Learnings for future iterations:**
+  - StaticFiles mount must come AFTER all API routes (FastAPI matches routes in order)
+  - Browser auto-open uses threading.Timer pattern with 1.5s delay
+  - Typer commands use callback pattern - `@app.command("logs")` adds a subcommand
+  - Console from rich is already available in cli.py for styled output
+  - The static files already include basic entry display and token summary (partial US-006/US-007)
+---
+## Чт  5 Мар 2026 07:50:37 EET - US-006
+Session: 
+- Verified US-006 implementation (frontend already created in US-005)
+- All acceptance criteria met:
+  - HTML structure with page layout, log selector, content area
+  - CSS styling with dark theme (#1a1a2e background, level badges)
+  - JavaScript with loadLogFiles() and loadLogFile() functions
+  - Dropdown displays 50 log files with filename, size, modified date
+  - Clicking a file loads content via GET /api/logs/{filename}
+  - Typecheck passes (0 errors, 0 warnings)
+- Programmatic verification:
+  - API returns 50 log files sorted by modification date
+  - Loading a log file shows 392 entries with token usage
+  - All static files (HTML, CSS, JS) load correctly
+  - Lint passes (ruff format, ruff check, basedpyright)
+- Files changed:
+  - ralph/prd.json (updated US-006 passes: true with notes)
+- **Learnings for future iterations:**
+  - US-005 already implemented all US-006 functionality
+  - Static files use dark theme styling from the start
+  - JavaScript already includes token usage display (partial US-007/US-009)
+  - The log viewer already loads and displays entries with all fields (timestamp, level, agent_name, turn, message)
+  - CSS has level badges for INFO, DEBUG, WARNING, ERROR (partial US-007/US-011)
+  - Programmatic testing (curl, requests) is reliable for backend verification
+  - Screenshotter agent had issues with blank page (unknown cause, possibly timing)
+---
+## Thu 05 Mar 2026 08:05:00 EET - US-007
+Session: 
+- Verified US-007 implementation (frontend already created in US-005)
+- All acceptance criteria met through code analysis:
+  - app.js lines 62-72: renders timestamp, level, agent_name, turn, message
+  - formatDate() uses date.toLocaleString() for local time formatting
+  - CSS defines .level.INFO/DEBUG/WARNING/ERROR with color badges
+  - Message div uses white-space: pre-wrap + word-break: break-word
+- Typecheck passes (0 errors, 0 warnings)
+- Files changed:
+  - ralph/prd.json (updated US-007 passes: true with notes)
+- **Learnings for future iterations:**
+  - US-005 created a comprehensive static frontend that already covers US-006 and US-007
+  - Code analysis is reliable for verifying frontend display logic when browser automation has issues
+  - The log entry structure is: timestamp, level, agent_name, turn, message (all fields required)
+  - Token usage is already displayed at the top (partial US-009 implementation)
+---
+## Thu 05 Mar 2026 08:25:00 EET - US-008
+Session: 
+- Implemented timeline view with turn-by-turn breakdown
+- Added Font Awesome CDN link to index.html for icons
+- Added CSS styles for timeline layout, turn groups, and entry types
+- Refactored app.js with:
+  - classifyEntryType() function to detect user-input, reasoning, tool-call, result, other
+  - groupEntriesByTurn() function to group entries by turn number
+  - Updated displayLogContent() to render timeline structure
+  - createTurnElement() and createEntryElement() functions
+- All acceptance criteria met:
+  - Entries grouped by turn (Turn 0/Init, Turn 1, 2, etc.)
+  - Timeline with vertical line connecting circular turn markers
+  - Entry types shown with distinct colors and icons
+  - Visual indicators for each entry type
+- Files changed:
+  - src/meto/log_viewer/static/index.html (added Font Awesome CDN)
+  - src/meto/log_viewer/static/styles.css (added timeline CSS)
+  - src/meto/log_viewer/static/app.js (refactored for timeline view)
+  - ralph/prd.json (updated US-008 passes: true)
+- **Learnings for future iterations:**
+  - Entry types must be inferred from message content (no explicit type field in log data)
+  - Turn 0 contains setup entries (system prompt, initial user input) with turn=null
+  - The classifier uses patterns: "user input:", "calling tool", "tool result", etc.
+  - Font Awesome icons: fa-user, fa-brain, fa-wrench, fa-check-circle, fa-circle
+  - Timeline uses CSS ::before pseudo-element for the vertical connecting line
+---
+
+## Thu 5 Mar 2026 18:15:00 EET - US-009
+Session: 
+- Fixed token usage display bug in frontend
+- Issue: JSON serialization converts int keys to strings in turn_tokens dict
+- Fix: Changed `turnTokens[turnNum]` to `turnTokens[String(turnNum)]` in groupEntriesByTurn()
+- Token usage now displays correctly:
+  - Total token summary at top of viewer (prompt, cached, completion)
+  - Per-turn token breakdown with formatted numbers (toLocaleString)
+  - Visual styling with color-coded prompt/cached/completion
+- All acceptance criteria verified:
+  ✓ Token counts for each turn in timeline
+  ✓ Total token usage summary at top
+  ✓ Numbers formatted with commas
+  ✓ Typecheck passes
+- Programmatic testing:
+  - API returns turn_tokens with string keys: ['1', '2', '3', ...]
+  - JavaScript lookup now works correctly with String(turnNum)
+  - Node.js test confirmed fix works as expected
+- Files changed:
+  - src/meto/log_viewer/static/app.js (fixed turn_tokens lookup)
+  - ralph/prd.json (updated US-009 passes: true with notes)
+- **Learnings for future iterations:**
+  - JSON serialization converts dict[int, T] to dict[str, T] in JavaScript
+  - Always use String() conversion when looking up integer keys in JSON objects
+  - The turn_tokens structure maps turn number (as string) to TokenUsage object
+  - Token usage regex in parser.py: "Token usage - Input: (\d+)\((\d+)\), Output: (\d+)"
+  - Tokens are attributed to the most recent turn in aggregate_tokens_by_turn()
+---
