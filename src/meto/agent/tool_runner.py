@@ -227,11 +227,16 @@ def _fetch(_context: Context, url: str, max_bytes: int = 100000) -> str:
 def _ask_user_question(_context: Context, question: str) -> str:
     """Ask user a question using prompt_toolkit and return response."""
 
+    console = Console()
     session = PromptSession(editing_mode=EditingMode.EMACS)
     try:
-        response = session.prompt(
-            f"[bold yellow]?[/bold yellow] [bold cyan]{question}[/bold cyan]\n[dim]Your answer:[/] "
-        )
+        # Print the question with Rich formatting (prompt_toolkit doesn't interpret Rich markup)
+        console.print()
+        console.print(f"[bold yellow]?[/bold yellow] [bold cyan]{question}[/bold cyan]")
+        console.print("[dim]Your answer:[/dim] ", end="")
+
+        # Get input with prompt_toolkit
+        response = session.prompt("")
         return response
     except (EOFError, KeyboardInterrupt):
         return "(user cancelled input)"
