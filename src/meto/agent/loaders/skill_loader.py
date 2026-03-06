@@ -9,13 +9,11 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict
-
-import yaml
+from typing import Any, TypedDict, override
 
 from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
-from meto.agent.loaders.agent_loader import validate_agent_config
-from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
+from meto.agent.loaders.agent_loader import AgentLoader
+from meto.agent.loaders.base import BaseResourceLoader
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -62,11 +60,9 @@ def _validate_skill_config(config: dict[str, Any]) -> list[str]:
     return errors
 
 
-class SkillLoader:
+class SkillLoader(BaseResourceLoader[SkillMetadata]):
     """Lazy-load skills: metadata at init, content on demand."""
 
-    skills_dir: Path
-    _skills: dict[str, SkillMetadata]
     _content_cache: dict[str, str]
 
     def __init__(self, skills_dir: Path):
@@ -75,25 +71,20 @@ class SkillLoader:
         Args:
             skills_dir: Path to directory containing skill subdirectories
         """
-        self.skills_dir = skills_dir
-        self._skills = {}
+        super().__init__(skills_dir)
         self._content_cache = {}
 
-        # Discover skills at initialization
-        self._discover_skills()
+        # Discover skills at initialization (matching original behavior)
+        self.discover()
 
-    def _discover_skills(self) -> None:
+    @override
+    def discover(self) -> None:
         """Scan skills directory for SKILL.md files."""
-        if not self.skills_dir.exists():
-            logger.debug(f"Skills directory {self.skills_dir} does not exist, no skills loaded")
-            return
-
-        if not self.skills_dir.is_dir():
-            logger.warning(f"Skills directory {self.skills_dir} is not a directory")
+        if not self.validate_directory():
             return
 
         # Each skill is a subdirectory containing SKILL.md
-        for skill_dir in sorted(self.skills_dir.iterdir()):
+        for skill_dir in sorted(self.directory.iterdir()):
             if not skill_dir.is_dir():
                 continue
 
@@ -101,42 +92,30 @@ class SkillLoader:
             if not skill_file.is_file():
                 continue
 
-            try:
-                # Parse metadata only (lazy loading)
-                content = skill_file.read_text(encoding="utf-8")
-            except (PermissionError, OSError) as e:
-                logger.warning(f"Cannot read skill file {skill_file}: {e}")
-                continue
-            except UnicodeDecodeError as e:
-                logger.warning(f"Cannot decode skill file {skill_file} as UTF-8: {e}")
+            parsed = self.parse_resource_file(skill_file)
+            if not parsed:
                 continue
 
-            try:
-                parsed = parse_yaml_frontmatter(content)
-                metadata: dict[str, Any] = parsed["metadata"]  # type: ignore[assignment]
+            metadata, _ = parsed
 
-                # Get name from frontmatter or directory name
-                name = str(metadata.get("name", skill_dir.name))
-                description = str(metadata.get("description", ""))
+            # Get name from frontmatter or directory name
+            name = str(metadata.get("name", skill_dir.name))
+            description = str(metadata.get("description", ""))
 
-                # Validate
-                config = {"name": name, "description": description}
-                errors = _validate_skill_config(config)
-                if errors:
-                    logger.warning(f"Invalid skill {skill_file}: {', '.join(errors)}")
-                    continue
-
-                # Store metadata
-                self._skills[name] = {
-                    "name": name,
-                    "description": description,
-                    "path": skill_file,
-                }
-                logger.debug(f"Discovered skill '{name}' at {skill_file}")
-
-            except (ValueError, KeyError) as e:
-                logger.warning(f"Invalid YAML frontmatter in {skill_file}: {e}")
+            # Validate
+            config = {"name": name, "description": description}
+            errors = _validate_skill_config(config)
+            if errors:
+                logger.warning(f"Invalid skill {skill_file}: {', '.join(errors)}")
                 continue
+
+            # Store metadata
+            self._resources[name] = {
+                "name": name,
+                "description": description,
+                "path": skill_file,
+            }
+            logger.debug(f"Discovered skill '{name}' at {skill_file}")
 
     def get_skill_descriptions(self) -> dict[str, str]:
         """Return name->description mapping for all discovered skills.
@@ -144,7 +123,7 @@ class SkillLoader:
         Returns:
             Dict mapping skill names to descriptions
         """
-        return {name: meta["description"] for name, meta in self._skills.items()}
+        return {name: meta["description"] for name, meta in self._resources.items()}
 
     def get_skill_content(self, skill_name: str) -> str:
         """Load full skill content (with caching).
@@ -163,20 +142,22 @@ class SkillLoader:
             return self._content_cache[skill_name]
 
         # Look up skill metadata
-        if skill_name not in self._skills:
-            available = ", ".join(sorted(self._skills.keys()))
+        if skill_name not in self._resources:
+            available = ", ".join(sorted(self._resources.keys()))
             raise ValueError(
                 f"Skill '{skill_name}' not found. Available skills: {available or '(none)'}"
             )
 
-        skill_meta = self._skills[skill_name]
+        skill_meta = self._resources[skill_name]
         skill_path = skill_meta["path"]
 
         try:
             # Read full file content
-            content = skill_path.read_text(encoding="utf-8")
-            parsed = parse_yaml_frontmatter(content)
-            body = parsed["body"]
+            parsed = self.parse_resource_file(skill_path)
+            if not parsed:
+                raise ValueError(f"Failed to parse skill file {skill_path}")
+
+            _, body = parsed
 
             # Check for additional resources in skill directory
             skill_dir = skill_path.parent
@@ -216,7 +197,7 @@ class SkillLoader:
         Returns:
             Sorted list of skill names
         """
-        return sorted(self._skills.keys())
+        return sorted(self._resources.keys())
 
     def has_skill(self, skill_name: str) -> bool:
         """Check if a skill exists.
@@ -227,7 +208,7 @@ class SkillLoader:
         Returns:
             True if skill exists, False otherwise
         """
-        return skill_name in self._skills
+        return skill_name in self._resources
 
     def get_skill_agents_dir(self, skill_name: str) -> Path | None:
         """Get the agents directory for a skill if it exists.
@@ -238,10 +219,10 @@ class SkillLoader:
         Returns:
             Path to agents directory, or None if it doesn't exist
         """
-        if skill_name not in self._skills:
+        if skill_name not in self._resources:
             return None
 
-        skill_file = self._skills[skill_name]["path"]
+        skill_file = self._resources[skill_name]["path"]
         skill_dir = skill_file.parent
         agents_dir = skill_dir / "agents"
 
@@ -283,8 +264,8 @@ class SkillLoader:
             SkillAgentValidationError: If the agent configuration is invalid
         """
         # Check skill exists
-        if skill_name not in self._skills:
-            available = ", ".join(sorted(self._skills.keys()))
+        if skill_name not in self._resources:
+            available = ", ".join(sorted(self._resources.keys()))
             raise SkillAgentNotFoundError(
                 f"Skill '{skill_name}' not found. Available skills: {available or '(none)'}"
             )
@@ -305,33 +286,10 @@ class SkillLoader:
                 f"Available agents: {available or '(none)'}"
             )
 
-        # Read and parse the agent file
-        try:
-            content = agent_file.read_text(encoding="utf-8")
-        except (PermissionError, OSError) as e:
-            raise SkillAgentNotFoundError(f"Cannot read agent file {agent_file}: {e}") from e
-        except UnicodeDecodeError as e:
-            raise SkillAgentValidationError(
-                f"Cannot decode agent file {agent_file} as UTF-8: {e}"
-            ) from e
+        # Use AgentLoader to parse and validate the agent file
+        loader = AgentLoader(agents_dir)
+        config, errors = loader.validate_agent_file(agent_file)
 
-        try:
-            parsed = parse_yaml_frontmatter(content)
-            metadata = parsed["metadata"]
-            body = parsed["body"]
-        except (ValueError, KeyError, yaml.YAMLError) as e:
-            raise SkillAgentValidationError(f"Invalid YAML frontmatter in {agent_file}: {e}") from e
-
-        # Build agent config (same structure as AgentConfig)
-        config = {
-            "name": metadata.get("name", agent_name),
-            "description": metadata.get("description", ""),
-            "tools": metadata.get("tools", []),
-            "prompt": metadata.get("prompt", body),
-        }
-
-        # Validate using the same validation as global agents
-        errors = validate_agent_config(config)
         if errors:
             error_msg = (
                 f"Agent '{agent_name}' in skill '{skill_name}' has validation errors: "
@@ -339,7 +297,23 @@ class SkillLoader:
             )
             raise SkillAgentValidationError(error_msg)
 
-        return config
+        if not config:
+            # Should not happen if errors is empty, but for type safety
+            raise SkillAgentValidationError(
+                f"Agent '{agent_name}' in skill '{skill_name}' could not be parsed."
+            )
+
+        # Merge in the name which isn't in AgentConfig but expected in the return
+        return {
+            "name": agent_name,
+            **config,
+        }
+
+    @override
+    def clear_cache(self) -> None:
+        """Clear all caches."""
+        super().clear_cache()
+        self._content_cache = {}
 
 
 @lru_cache(maxsize=16)

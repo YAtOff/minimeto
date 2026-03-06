@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import override
 
-from meto.agent.rule_loader import get_rule_loader
+from meto.agent.loaders.rule_loader import get_rule_loader
 from meto.conf import settings
 
 from .base import HookResult, PreToolUseHook

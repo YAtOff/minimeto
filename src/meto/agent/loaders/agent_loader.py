@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict, cast, override
 
 from meto.agent.exceptions import ToolNotFoundError
-from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
+from meto.agent.loaders.base import BaseResourceLoader
 from meto.agent.tool_registry import registry
 from meto.agent.tool_schema import TOOLS, TOOLS_BY_NAME
 from meto.conf import settings
@@ -122,21 +122,45 @@ def validate_agent_config(config: dict[str, Any]) -> list[str]:
     return errors
 
 
-def parse_agent_file(path: Path) -> AgentConfig | None:
-    """Parse a single agent file.
+class AgentLoader(BaseResourceLoader[AgentConfig]):
+    """Lazy-load agents: agents defined in .meto/agents/."""
 
-    Args:
-        path: Path to agent markdown file
+    def __init__(self, agents_dir: Path):
+        """Initialize agent loader.
 
-    Returns:
-        AgentConfig if valid, None if parsing failed (error logged)
-    """
-    try:
-        content = path.read_text(encoding="utf-8")
-        parsed = parse_yaml_frontmatter(content)
+        Args:
+            agents_dir: Path to directory containing agent files
+        """
+        super().__init__(agents_dir)
 
-        metadata = parsed["metadata"]
-        body = parsed["body"]
+    @override
+    def discover(self) -> None:
+        """Discover and parse agent files."""
+        if not self.validate_directory():
+            return
+
+        for path in sorted(self.directory.glob("*.md")):
+            if path.is_file():
+                agent_config = self.parse_agent_file(path)
+                if agent_config:
+                    name = path.stem
+                    self._resources[name] = agent_config
+                    logger.debug(f"Loaded agent '{name}' from {path}")
+
+    def validate_agent_file(self, path: Path) -> tuple[AgentConfig | None, list[str]]:
+        """Validate a single agent file and return its config and errors.
+
+        Args:
+            path: Path to agent markdown file
+
+        Returns:
+            Tuple of (AgentConfig if valid, list of error messages)
+        """
+        parsed = self.parse_resource_file(path)
+        if not parsed:
+            return None, ["Failed to parse resource file (invalid frontmatter or cannot read)"]
+
+        metadata, body = parsed
 
         # Get name from frontmatter or filename
         name = metadata.get("name", path.stem)
@@ -154,85 +178,38 @@ def parse_agent_file(path: Path) -> AgentConfig | None:
         # Validate
         errors = validate_agent_config(config)
         if errors:
-            logger.warning(f"Invalid agent file {path}: {', '.join(errors)}")
-            return None
+            return None, errors
 
         # Return AgentConfig
         return {
             "description": config["description"],
             "tools": config["tools"],
             "prompt": config["prompt"],
-        }
+        }, []
 
-    except Exception as e:
-        logger.warning(f"Failed to parse agent file {path}: {e}")
-        return None
-
-
-class AgentLoader:
-    """Lazy-load agents: agents defined in .meto/agents/."""
-
-    agents_dir: Path
-    _agents: dict[str, AgentConfig] | None
-
-    def __init__(self, agents_dir: Path):
-        """Initialize agent loader.
+    def parse_agent_file(self, path: Path) -> AgentConfig | None:
+        """Parse a single agent file.
 
         Args:
-            agents_dir: Path to directory containing agent files
-        """
-        self.agents_dir = agents_dir
-        self._agents = None
-
-    def _discover_agents(self) -> dict[str, AgentConfig]:
-        """Discover and parse agent files.
+            path: Path to agent markdown file
 
         Returns:
-            Dict mapping agent names to AgentConfig
+            AgentConfig if valid, None if parsing failed (error logged)
         """
-        if not self.agents_dir.exists():
-            logger.debug(f"Agents directory {self.agents_dir} does not exist, skipping agents")
-            return {}
-
-        if not self.agents_dir.is_dir():
-            logger.warning(
-                f"Agents directory {self.agents_dir} is not a directory, skipping agents"
-            )
-            return {}
-
-        agents: dict[str, AgentConfig] = {}
-
-        for path in sorted(self.agents_dir.glob("*.md")):
-            if path.is_file():
-                agent_config = parse_agent_file(path)
-                if agent_config:
-                    name = path.stem
-                    agents[name] = agent_config
-                    logger.debug(f"Loaded agent '{name}' from {path}")
-
-        return agents
-
-    def _load_agents(self) -> dict[str, AgentConfig]:
-        """Load agents with caching.
-
-        Returns:
-            Dict mapping agent names to AgentConfig
-        """
-        if self._agents is None:
-            self._agents = self._discover_agents()
-        return self._agents
+        config, errors = self.validate_agent_file(path)
+        if errors:
+            logger.warning(f"Invalid agent file {path}: {', '.join(errors)}")
+            return None
+        return config
 
     def get_agents(self) -> dict[str, AgentConfig]:
-        """Load agents
+        """Load agents.
 
         Returns:
             Dict mapping agent names to AgentConfig
         """
-        if self._agents is not None:
-            return self._agents
-
-        self._agents = self._load_agents()
-        return self._agents
+        self._ensure_loaded()
+        return self._resources
 
     def list_agents(self) -> list[str]:
         """Return list of all available agent names.
@@ -273,13 +250,6 @@ class AgentLoader:
             )
         return agents[agent_name]
 
-    def clear_cache(self) -> None:
-        """Clear all caches.
-
-        Useful for testing or when agent files change.
-        """
-        self._agents = None
-
 
 @lru_cache(maxsize=16)
 def _get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
@@ -305,7 +275,7 @@ def clear_agent_cache() -> None:
 
 
 def get_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
-    """Load agents
+    """Load agents.
 
     Args:
         agents_dir: Directory to scan for agent files
@@ -315,3 +285,17 @@ def get_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
     """
     loader = _get_agent_loader(agents_dir)
     return loader.get_agents()
+
+
+def parse_agent_file(path: Path) -> AgentConfig | None:
+    """Standalone parse_agent_file for backward compatibility and tests.
+
+    Args:
+        path: Path to agent markdown file
+
+    Returns:
+        AgentConfig if valid, None if parsing failed
+    """
+    # Create a temporary loader to use its parse_agent_file logic
+    loader = AgentLoader(path.parent)
+    return loader.parse_agent_file(path)

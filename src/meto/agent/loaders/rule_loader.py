@@ -11,9 +11,9 @@ import fnmatch
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
-from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
+from meto.agent.loaders.base import BaseResourceLoader
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -121,15 +121,12 @@ def _validate_rule_config(config: dict[str, Any]) -> list[str]:
     return errors
 
 
-class RuleLoader:
+class RuleLoader(BaseResourceLoader[RuleMetadata]):
     """Load and match rules for file operations.
 
     Rules are discovered at initialization and cached for performance.
     Pattern matching is performed on-demand when rules are requested.
     """
-
-    rules_dir: Path
-    _rules: list[RuleMetadata]
 
     def __init__(self, rules_dir: Path):
         """Initialize rule loader and discover available rules.
@@ -137,64 +134,54 @@ class RuleLoader:
         Args:
             rules_dir: Path to directory containing rule files
         """
-        self.rules_dir = rules_dir
-        self._rules = []
+        super().__init__(rules_dir)
 
-        # Discover rules at initialization
-        self._discover_rules()
+        # Discover rules at initialization (matching original behavior)
+        self.discover()
 
-    def _discover_rules(self) -> None:
+    @override
+    def discover(self) -> None:
         """Scan rules directory for .md files."""
-        if not self.rules_dir.exists():
-            logger.debug(f"Rules directory {self.rules_dir} does not exist, no rules loaded")
-            return
-
-        if not self.rules_dir.is_dir():
-            logger.warning(f"Rules directory {self.rules_dir} is not a directory")
+        if not self.validate_directory():
             return
 
         # Each rule is a .md file with YAML frontmatter
-        for rule_file in sorted(self.rules_dir.glob("*.md")):
+        for rule_file in sorted(self.directory.glob("*.md")):
             if not rule_file.is_file():
                 continue
 
-            try:
-                # Parse the rule file
-                content = rule_file.read_text(encoding="utf-8")
-                parsed = parse_yaml_frontmatter(content)
-                metadata: dict[str, Any] = parsed["metadata"]  # type: ignore[assignment]
-                body = parsed["body"]
-
-                # Get name from frontmatter or filename
-                name = str(metadata.get("name", rule_file.stem))
-                description = str(metadata.get("description", ""))
-                patterns = metadata.get("patterns", [])
-
-                # Validate
-                config = {"name": name, "description": description, "patterns": patterns}
-                errors = _validate_rule_config(config)
-                if errors:
-                    logger.warning(f"Invalid rule {rule_file}: {', '.join(errors)}")
-                    continue
-
-                # Convert patterns to list if needed
-                if not isinstance(patterns, list):
-                    patterns = [patterns]
-
-                # Store rule
-                rule = RuleMetadata(
-                    name=name,
-                    description=description,
-                    patterns=patterns,  # type: ignore[arg-type]
-                    path=rule_file,
-                    content=body,
-                )
-                self._rules.append(rule)
-                logger.debug(f"Discovered rule '{name}' at {rule_file}")
-
-            except Exception as e:
-                logger.warning(f"Failed to parse rule file {rule_file}: {e}")
+            parsed = self.parse_resource_file(rule_file)
+            if not parsed:
                 continue
+
+            metadata, body = parsed
+
+            # Get name from frontmatter or filename
+            name = str(metadata.get("name", rule_file.stem))
+            description = str(metadata.get("description", ""))
+            patterns = metadata.get("patterns", [])
+
+            # Validate
+            config = {"name": name, "description": description, "patterns": patterns}
+            errors = _validate_rule_config(config)
+            if errors:
+                logger.warning(f"Invalid rule {rule_file}: {', '.join(errors)}")
+                continue
+
+            # Convert patterns to list if needed
+            if not isinstance(patterns, list):
+                patterns = [patterns]
+
+            # Store rule
+            rule = RuleMetadata(
+                name=name,
+                description=description,
+                patterns=patterns,  # type: ignore[arg-type]
+                path=rule_file,
+                content=body,
+            )
+            self._resources[name] = rule
+            logger.debug(f"Discovered rule '{name}' at {rule_file}")
 
     def find_matching_rules(self, filename: str) -> list[RuleMetadata]:
         """Find all rules that match the given filename.
@@ -206,7 +193,7 @@ class RuleLoader:
             List of matching rules (in discovery order)
         """
         matching = []
-        for rule in self._rules:
+        for rule in self._resources.values():
             if rule.matches(filename):
                 matching.append(rule)
         return matching
@@ -223,11 +210,10 @@ class RuleLoader:
         Raises:
             ValueError: If rule not found
         """
-        for rule in self._rules:
-            if rule.name == rule_name:
-                return rule.content
+        if rule_name in self._resources:
+            return self._resources[rule_name].content
 
-        available = ", ".join(sorted(r.name for r in self._rules))
+        available = ", ".join(sorted(self._resources.keys()))
         raise ValueError(f"Rule '{rule_name}' not found. Available rules: {available or '(none)'}")
 
     def list_rules(self) -> list[str]:
@@ -236,7 +222,7 @@ class RuleLoader:
         Returns:
             Sorted list of rule names
         """
-        return sorted(rule.name for rule in self._rules)
+        return sorted(self._resources.keys())
 
     def get_rule_descriptions(self) -> dict[str, str]:
         """Return name->description mapping for all discovered rules.
@@ -244,7 +230,7 @@ class RuleLoader:
         Returns:
             Dict mapping rule names to descriptions
         """
-        return {rule.name: rule.description for rule in self._rules}
+        return {name: rule.description for name, rule in self._resources.items()}
 
     def has_rules(self) -> bool:
         """Check if any rules are loaded.
@@ -252,7 +238,7 @@ class RuleLoader:
         Returns:
             True if at least one rule is loaded, False otherwise
         """
-        return len(self._rules) > 0
+        return len(self._resources) > 0
 
 
 @lru_cache(maxsize=16)
