@@ -8,15 +8,15 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import cyclopts
 import mcp.types
+from fastmcp import Client
 from rich.console import Console
 
-from fastmcp import Client
 
-def _load_client_spec() -> dict:
+def _load_client_spec() -> dict[str, Any]:
     """Load client spec from .mcp.json, resolving dynamic values at runtime."""
     config_path = Path.cwd() / ".meto" / "mcp.json"
     with open(config_path) as f:
@@ -41,8 +41,8 @@ console = Console()
 # ---------------------------------------------------------------------------
 
 
-def _print_tool_result(result):
-    if result.is_error:
+def _print_tool_result(result: Any) -> None:
+    if getattr(result, "is_error", False):
         for block in result.content:
             if isinstance(block, mcp.types.TextContent):
                 console.print(f"[bold red]Error:[/bold red] {block.text}")
@@ -50,7 +50,7 @@ def _print_tool_result(result):
                 console.print(f"[bold red]Error:[/bold red] {block}")
         sys.exit(1)
 
-    if result.structured_content is not None:
+    if getattr(result, "structured_content", None) is not None:
         console.print_json(json.dumps(result.structured_content))
         return
 
@@ -65,7 +65,7 @@ def _print_tool_result(result):
             console.print(f"[dim][Audio: {block.mimeType}, ~{size} bytes][/dim]")
 
 
-async def _call_tool(tool_name: str, arguments: dict) -> None:
+async def _call_tool(tool_name: str, arguments: dict[str, Any]) -> None:
     # Filter out None values and empty lists (defaults for optional array params)
     filtered = {
         k: v
@@ -134,7 +134,7 @@ async def read_resource(uri: Annotated[str, cyclopts.Parameter(help="Resource UR
         for block in contents:
             if isinstance(block, mcp.types.TextResourceContents):
                 console.print(block.text)
-            elif isinstance(block, mcp.types.BlobResourceContents):
+            else:
                 size = len(block.blob) * 3 // 4
                 console.print(f"[dim][Blob: {block.mimeType}, ~{size} bytes][/dim]")
 
@@ -167,7 +167,9 @@ async def get_prompt(
     parsed: dict[str, str] = {}
     for arg in arguments:
         if "=" not in arg:
-            console.print(f"[bold red]Error:[/bold red] Invalid argument {arg!r} — expected key=value")
+            console.print(
+                f"[bold red]Error:[/bold red] Invalid argument {arg!r} — expected key=value"
+            )
             sys.exit(1)
         key, value = arg.split("=", 1)
         parsed[key] = value
@@ -190,60 +192,81 @@ async def get_prompt(
 # Tool commands (generated from server schema)
 # ---------------------------------------------------------------------------
 
-@call_tool_app.command(name='resolve-library-id')
+
+@call_tool_app.command(name="resolve-library-id")
 async def resolve_library_id(
     *,
-    query: Annotated[str, cyclopts.Parameter(help="The question or task you need help with. This is used to rank library results by relevance to what the user is trying to accomplish. The query is sent to the Context7 API for processing. Do not include any sensitive or confidential information such as API keys, passwords, credentials, personal data, or proprietary code in your query.")],
-    libraryName: Annotated[str, cyclopts.Parameter(help="Library name to search for and retrieve a Context7-compatible library ID.")],
+    query: Annotated[
+        str,
+        cyclopts.Parameter(
+            help="The question or task you need help with. This is used to rank library results by relevance to what the user is trying to accomplish. The query is sent to the Context7 API for processing. Do not include any sensitive or confidential information such as API keys, passwords, credentials, personal data, or proprietary code in your query."
+        ),
+    ],
+    libraryName: Annotated[
+        str,
+        cyclopts.Parameter(
+            help="Library name to search for and retrieve a Context7-compatible library ID."
+        ),
+    ],
 ) -> None:
-    '''Resolves a package/product name to a Context7-compatible library ID and returns matching libraries.
+    """Resolves a package/product name to a Context7-compatible library ID and returns matching libraries.
 
-You MUST call this function before \'Query Documentation\' tool to obtain a valid Context7-compatible library ID UNLESS the user explicitly provides a library ID in the format \'/org/project\' or \'/org/project/version\' in their query.
+    You MUST call this function before \'Query Documentation\' tool to obtain a valid Context7-compatible library ID UNLESS the user explicitly provides a library ID in the format \'/org/project\' or \'/org/project/version\' in their query.
 
-Each result includes:
-- Library ID: Context7-compatible identifier (format: /org/project)
-- Name: Library or package name
-- Description: Short summary
-- Code Snippets: Number of available code examples
-- Source Reputation: Authority indicator (High, Medium, Low, or Unknown)
-- Benchmark Score: Quality indicator (100 is the highest score)
-- Versions: List of versions if available. Use one of those versions if the user provides a version in their query. The format of the version is /org/project/version.
+    Each result includes:
+    - Library ID: Context7-compatible identifier (format: /org/project)
+    - Name: Library or package name
+    - Description: Short summary
+    - Code Snippets: Number of available code examples
+    - Source Reputation: Authority indicator (High, Medium, Low, or Unknown)
+    - Benchmark Score: Quality indicator (100 is the highest score)
+    - Versions: List of versions if available. Use one of those versions if the user provides a version in their query. The format of the version is /org/project/version.
 
-For best results, select libraries based on name match, source reputation, snippet coverage, benchmark score, and relevance to your use case.
+    For best results, select libraries based on name match, source reputation, snippet coverage, benchmark score, and relevance to your use case.
 
-Selection Process:
-1. Analyze the query to understand what library/package the user is looking for
-2. Return the most relevant match based on:
-- Name similarity to the query (exact matches prioritized)
-- Description relevance to the query\'s intent
-- Documentation coverage (prioritize libraries with higher Code Snippet counts)
-- Source reputation (consider libraries with High or Medium reputation more authoritative)
-- Benchmark Score: Quality indicator (100 is the highest score)
+    Selection Process:
+    1. Analyze the query to understand what library/package the user is looking for
+    2. Return the most relevant match based on:
+    - Name similarity to the query (exact matches prioritized)
+    - Description relevance to the query\'s intent
+    - Documentation coverage (prioritize libraries with higher Code Snippet counts)
+    - Source reputation (consider libraries with High or Medium reputation more authoritative)
+    - Benchmark Score: Quality indicator (100 is the highest score)
 
-Response Format:
-- Return the selected library ID in a clearly marked section
-- Provide a brief explanation for why this library was chosen
-- If multiple good matches exist, acknowledge this but proceed with the most relevant one
-- If no good matches exist, clearly state this and suggest query refinements
+    Response Format:
+    - Return the selected library ID in a clearly marked section
+    - Provide a brief explanation for why this library was chosen
+    - If multiple good matches exist, acknowledge this but proceed with the most relevant one
+    - If no good matches exist, clearly state this and suggest query refinements
 
-For ambiguous queries, request clarification before proceeding with a best-guess match.
+    For ambiguous queries, request clarification before proceeding with a best-guess match.
 
-IMPORTANT: Do not call this tool more than 3 times per question. If you cannot find what you need after 3 calls, use the best result you have.'''
-    await _call_tool('resolve-library-id', {'query': query, 'libraryName': libraryName})
+    IMPORTANT: Do not call this tool more than 3 times per question. If you cannot find what you need after 3 calls, use the best result you have."""
+    await _call_tool("resolve-library-id", {"query": query, "libraryName": libraryName})
 
 
-@call_tool_app.command(name='query-docs')
+@call_tool_app.command(name="query-docs")
 async def query_docs(
     *,
-    libraryId: Annotated[str, cyclopts.Parameter(help="Exact Context7-compatible library ID (e.g., '/mongodb/docs', '/vercel/next.js', '/supabase/supabase', '/vercel/next.js/v14.3.0-canary.87') retrieved from 'resolve-library-id' or directly from user query in the format '/org/project' or '/org/project/version'.")],
-    query: Annotated[str, cyclopts.Parameter(help="The question or task you need help with. Be specific and include relevant details. Good: 'How to set up authentication with JWT in Express.js' or 'React useEffect cleanup function examples'. Bad: 'auth' or 'hooks'. The query is sent to the Context7 API for processing. Do not include any sensitive or confidential information such as API keys, passwords, credentials, personal data, or proprietary code in your query.")],
+    libraryId: Annotated[
+        str,
+        cyclopts.Parameter(
+            help="Exact Context7-compatible library ID (e.g., '/mongodb/docs', '/vercel/next.js', '/supabase/supabase', '/vercel/next.js/v14.3.0-canary.87') retrieved from 'resolve-library-id' or directly from user query in the format '/org/project' or '/org/project/version'."
+        ),
+    ],
+    query: Annotated[
+        str,
+        cyclopts.Parameter(
+            help="The question or task you need help with. Be specific and include relevant details. Good: 'How to set up authentication with JWT in Express.js' or 'React useEffect cleanup function examples'. Bad: 'auth' or 'hooks'. The query is sent to the Context7 API for processing. Do not include any sensitive or confidential information such as API keys, passwords, credentials, personal data, or proprietary code in your query."
+        ),
+    ],
 ) -> None:
-    '''Retrieves and queries up-to-date documentation and code examples from Context7 for any programming library or framework.
+    """Retrieves and queries up-to-date documentation and code examples from Context7 for any programming library or framework.
 
-You must call \'Resolve Context7 Library ID\' tool first to obtain the exact Context7-compatible library ID required to use this tool, UNLESS the user explicitly provides a library ID in the format \'/org/project\' or \'/org/project/version\' in their query.
+    You must call \'Resolve Context7 Library ID\' tool first to obtain the exact Context7-compatible library ID required to use this tool, UNLESS the user explicitly provides a library ID in the format \'/org/project\' or \'/org/project/version\' in their query.
 
-IMPORTANT: Do not call this tool more than 3 times per question. If you cannot find what you need after 3 calls, use the best information you have.'''
-    await _call_tool('query-docs', {'libraryId': libraryId, 'query': query})
+    IMPORTANT: Do not call this tool more than 3 times per question. If you cannot find what you need after 3 calls, use the best information you have."""
+    await _call_tool("query-docs", {"libraryId": libraryId, "query": query})
 
 
 if __name__ == "__main__":

@@ -65,13 +65,13 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
 
     _content_cache: dict[str, str]
 
-    def __init__(self, skills_dir: Path):
+    def __init__(self, skills_dirs: Path | list[Path]):
         """Initialize skill loader and discover available skills.
 
         Args:
-            skills_dir: Path to directory containing skill subdirectories
+            skills_dirs: Path or list of paths to directories containing skill subdirectories
         """
-        super().__init__(skills_dir)
+        super().__init__(skills_dirs)
         self._content_cache = {}
 
         # Discover skills at initialization (matching original behavior)
@@ -79,43 +79,45 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
 
     @override
     def discover(self) -> None:
-        """Scan skills directory for SKILL.md files."""
-        if not self.validate_directory():
+        """Scan skills directories for SKILL.md files."""
+        valid_dirs = self.validate_directories()
+        if not valid_dirs:
             return
 
-        # Each skill is a subdirectory containing SKILL.md
-        for skill_dir in sorted(self.directory.iterdir()):
-            if not skill_dir.is_dir():
-                continue
+        for directory in valid_dirs:
+            # Each skill is a subdirectory containing SKILL.md
+            for skill_dir in sorted(directory.iterdir()):
+                if not skill_dir.is_dir():
+                    continue
 
-            skill_file = skill_dir / "SKILL.md"
-            if not skill_file.is_file():
-                continue
+                skill_file = skill_dir / "SKILL.md"
+                if not skill_file.is_file():
+                    continue
 
-            parsed = self.parse_resource_file(skill_file)
-            if not parsed:
-                continue
+                parsed = self.parse_resource_file(skill_file)
+                if not parsed:
+                    continue
 
-            metadata, _ = parsed
+                metadata, _ = parsed
 
-            # Get name from frontmatter or directory name
-            name = str(metadata.get("name", skill_dir.name))
-            description = str(metadata.get("description", ""))
+                # Get name from frontmatter or directory name
+                name = str(metadata.get("name", skill_dir.name))
+                description = str(metadata.get("description", ""))
 
-            # Validate
-            config = {"name": name, "description": description}
-            errors = _validate_skill_config(config)
-            if errors:
-                logger.warning(f"Invalid skill {skill_file}: {', '.join(errors)}")
-                continue
+                # Validate
+                config = {"name": name, "description": description}
+                errors = _validate_skill_config(config)
+                if errors:
+                    logger.warning(f"Invalid skill {skill_file}: {', '.join(errors)}")
+                    continue
 
-            # Store metadata
-            self._resources[name] = {
-                "name": name,
-                "description": description,
-                "path": skill_file,
-            }
-            logger.debug(f"Discovered skill '{name}' at {skill_file}")
+                # Store metadata (later directories override earlier ones)
+                self._resources[name] = {
+                    "name": name,
+                    "description": description,
+                    "path": skill_file,
+                }
+                logger.debug(f"Discovered skill '{name}' at {skill_file}")
 
     def get_skill_descriptions(self) -> dict[str, str]:
         """Return name->description mapping for all discovered skills.
@@ -317,26 +319,29 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
 
 
 @lru_cache(maxsize=16)
-def _get_skill_loader(skills_dir: Path | None = None) -> SkillLoader:
+def _get_skill_loader(skills_dirs: tuple[Path, ...] | None = None) -> SkillLoader:
     """Return a cached skill loader instance.
 
     The cache key is the resolved skills directory path.
     """
+    if skills_dirs is not None:
+        resolved = list(skills_dirs)
+    else:
+        resolved = [settings.DEFAULT_RESOURCES_DIR / "skills", settings.SKILLS_DIR]
 
-    resolved = skills_dir if skills_dir is not None else Path(settings.SKILLS_DIR)
     return SkillLoader(resolved)
 
 
-def get_skill_loader(skills_dir: Path | None = None) -> SkillLoader:
+def get_skill_loader(skills_dirs: tuple[Path, ...] | None = None) -> SkillLoader:
     """Get or create the global skill loader instance.
 
     Args:
-        skills_dir: Directory to scan for skills
+        skills_dirs: Directories to scan for skills
 
     Returns:
         SkillLoader instance
     """
-    return _get_skill_loader(skills_dir)
+    return _get_skill_loader(skills_dirs)
 
 
 def clear_skill_cache() -> None:

@@ -5,10 +5,10 @@ from rich import get_console, reconfigure
 from rich import print as rprint
 
 # Update as needed.
-SRC_PATHS = ["src", "tests", "devtools"]
+SRC_PATHS = ["src", "tests", "scripts"]
 # Intentionally exclude tests from type checking: test code is often intentionally
 # flexible/dynamic and we don't want it to block the main lint workflow.
-TYPECHECK_PATHS = ["src", "devtools"]
+TYPECHECK_PATHS = ["src", "scripts"]
 DOC_PATHS = ["README.md"]
 
 

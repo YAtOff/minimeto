@@ -123,29 +123,31 @@ def validate_agent_config(config: dict[str, Any]) -> list[str]:
 
 
 class AgentLoader(BaseResourceLoader[AgentConfig]):
-    """Lazy-load agents: agents defined in .meto/agents/."""
+    """Lazy-load agents: agents defined in .meto/agents/ and package defaults."""
 
-    def __init__(self, agents_dir: Path):
+    def __init__(self, agents_dirs: Path | list[Path]):
         """Initialize agent loader.
 
         Args:
-            agents_dir: Path to directory containing agent files
+            agents_dirs: Path or list of paths to directories containing agent files
         """
-        super().__init__(agents_dir)
+        super().__init__(agents_dirs)
 
     @override
     def discover(self) -> None:
         """Discover and parse agent files."""
-        if not self.validate_directory():
+        valid_dirs = self.validate_directories()
+        if not valid_dirs:
             return
 
-        for path in sorted(self.directory.glob("*.md")):
-            if path.is_file():
-                agent_config = self.parse_agent_file(path)
-                if agent_config:
-                    name = path.stem
-                    self._resources[name] = agent_config
-                    logger.debug(f"Loaded agent '{name}' from {path}")
+        for directory in valid_dirs:
+            for path in sorted(directory.glob("*.md")):
+                if path.is_file():
+                    agent_config = self.parse_agent_file(path)
+                    if agent_config:
+                        name = path.stem
+                        self._resources[name] = agent_config
+                        logger.debug(f"Loaded agent '{name}' from {path}")
 
     def validate_agent_file(self, path: Path) -> tuple[AgentConfig | None, list[str]]:
         """Validate a single agent file and return its config and errors.
@@ -252,16 +254,20 @@ class AgentLoader(BaseResourceLoader[AgentConfig]):
 
 
 @lru_cache(maxsize=16)
-def _get_agent_loader(agents_dir: Path | None = None) -> AgentLoader:
+def _get_agent_loader(agents_dirs: tuple[Path, ...] | None = None) -> AgentLoader:
     """Get or create the global agent loader instance.
 
     Args:
-        agents_dir: Directory to scan for agent files
+        agents_dirs: Directories to scan for agent files
 
     Returns:
         AgentLoader instance
     """
-    resolved = agents_dir if agents_dir is not None else Path(settings.AGENTS_DIR)
+    if agents_dirs is not None:
+        resolved = list(agents_dirs)
+    else:
+        resolved = [settings.DEFAULT_RESOURCES_DIR / "agents", settings.AGENTS_DIR]
+
     return AgentLoader(resolved)
 
 
@@ -274,16 +280,16 @@ def clear_agent_cache() -> None:
     _get_agent_loader.cache_clear()
 
 
-def get_agents(agents_dir: Path | None = None) -> dict[str, AgentConfig]:
+def get_agents(agents_dirs: tuple[Path, ...] | None = None) -> dict[str, AgentConfig]:
     """Load agents.
 
     Args:
-        agents_dir: Directory to scan for agent files
+        agents_dirs: Directories to scan for agent files
 
     Returns:
         Dict mapping agent names to AgentConfig
     """
-    loader = _get_agent_loader(agents_dir)
+    loader = _get_agent_loader(agents_dirs)
     return loader.get_agents()
 
 

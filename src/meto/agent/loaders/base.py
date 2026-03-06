@@ -16,22 +16,27 @@ logger = logging.getLogger(__name__)
 
 
 class BaseResourceLoader[T]:
-    """Base class for loading resources from a directory.
+    """Base class for loading resources from multiple directories.
 
     Handles directory validation and provides common file parsing utilities.
+    Later directories override resources from earlier directories.
     """
 
-    directory: Path
+    directories: list[Path]
     _resources: dict[str, T]
     _loaded: bool
 
-    def __init__(self, directory: Path):
+    def __init__(self, directories: Path | list[Path]):
         """Initialize the loader.
 
         Args:
-            directory: Path to the directory containing resources.
+            directories: Path or list of paths to directories containing resources.
         """
-        self.directory = directory
+        if isinstance(directories, Path):
+            self.directories = [directories]
+        else:
+            self.directories = directories
+
         self._resources = {}
         self._loaded = False
 
@@ -42,7 +47,7 @@ class BaseResourceLoader[T]:
             self._loaded = True
 
     def discover(self) -> None:
-        """Discover resources in the directory.
+        """Discover resources in the directories.
 
         Should be implemented by subclasses.
         """
@@ -68,21 +73,25 @@ class BaseResourceLoader[T]:
             logger.warning(f"Failed to parse resource file {path}: {e}")
             return None
 
-    def validate_directory(self) -> bool:
-        """Check if the directory exists and is a directory.
+    def validate_directories(self) -> list[Path]:
+        """Check which directories exist and are directories.
 
         Returns:
-            True if valid, False otherwise.
+            List of valid directories.
         """
-        if not self.directory.exists():
-            logger.debug(f"Directory {self.directory} does not exist")
-            return False
+        valid_dirs = []
+        for directory in self.directories:
+            if not directory.exists():
+                logger.debug(f"Directory {directory} does not exist")
+                continue
 
-        if not self.directory.is_dir():
-            logger.warning(f"Path {self.directory} is not a directory")
-            return False
+            if not directory.is_dir():
+                logger.warning(f"Path {directory} is not a directory")
+                continue
 
-        return True
+            valid_dirs.append(directory)
+
+        return valid_dirs
 
     def clear_cache(self) -> None:
         """Clear the resource cache."""

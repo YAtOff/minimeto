@@ -122,66 +122,69 @@ def _validate_rule_config(config: dict[str, Any]) -> list[str]:
 
 
 class RuleLoader(BaseResourceLoader[RuleMetadata]):
-    """Load and match rules for file operations.
+    """Load and match rules for file operations from multiple directories.
 
     Rules are discovered at initialization and cached for performance.
+    Later directories override rules from earlier directories.
     Pattern matching is performed on-demand when rules are requested.
     """
 
-    def __init__(self, rules_dir: Path):
+    def __init__(self, rules_dirs: Path | list[Path]):
         """Initialize rule loader and discover available rules.
 
         Args:
-            rules_dir: Path to directory containing rule files
+            rules_dirs: Path or list of paths to directories containing rule files
         """
-        super().__init__(rules_dir)
+        super().__init__(rules_dirs)
 
         # Discover rules at initialization (matching original behavior)
         self.discover()
 
     @override
     def discover(self) -> None:
-        """Scan rules directory for .md files."""
-        if not self.validate_directory():
+        """Scan rules directories for .md files."""
+        valid_dirs = self.validate_directories()
+        if not valid_dirs:
             return
 
-        # Each rule is a .md file with YAML frontmatter
-        for rule_file in sorted(self.directory.glob("*.md")):
-            if not rule_file.is_file():
-                continue
+        for directory in valid_dirs:
+            # Each rule is a .md file with YAML frontmatter
+            for rule_file in sorted(directory.glob("*.md")):
+                if not rule_file.is_file():
+                    continue
 
-            parsed = self.parse_resource_file(rule_file)
-            if not parsed:
-                continue
+                parsed = self.parse_resource_file(rule_file)
+                if not parsed:
+                    continue
 
-            metadata, body = parsed
+                metadata, body = parsed
 
-            # Get name from frontmatter or filename
-            name = str(metadata.get("name", rule_file.stem))
-            description = str(metadata.get("description", ""))
-            patterns = metadata.get("patterns", [])
+                # Get name from frontmatter or filename
+                name = str(metadata.get("name", rule_file.stem))
+                description = str(metadata.get("description", ""))
+                patterns = metadata.get("patterns", [])
 
-            # Validate
-            config = {"name": name, "description": description, "patterns": patterns}
-            errors = _validate_rule_config(config)
-            if errors:
-                logger.warning(f"Invalid rule {rule_file}: {', '.join(errors)}")
-                continue
+                # Validate
+                config = {"name": name, "description": description, "patterns": patterns}
+                errors = _validate_rule_config(config)
+                if errors:
+                    logger.warning(f"Invalid rule {rule_file}: {', '.join(errors)}")
+                    continue
 
-            # Convert patterns to list if needed
-            if not isinstance(patterns, list):
-                patterns = [patterns]
+                # Convert patterns to list if needed
+                if not isinstance(patterns, list):
+                    patterns = [patterns]
 
-            # Store rule
-            rule = RuleMetadata(
-                name=name,
-                description=description,
-                patterns=patterns,  # type: ignore[arg-type]
-                path=rule_file,
-                content=body,
-            )
-            self._resources[name] = rule
-            logger.debug(f"Discovered rule '{name}' at {rule_file}")
+                # Store rule (later directories override earlier ones)
+                rule = RuleMetadata(
+                    name=name,
+                    description=description,
+                    patterns=patterns,  # type: ignore[arg-type]
+                    path=rule_file,
+                    content=body,
+                )
+                self._resources[name] = rule
+                logger.debug(f"Discovered rule '{name}' at {rule_file}")
 
     def find_matching_rules(self, filename: str) -> list[RuleMetadata]:
         """Find all rules that match the given filename.
@@ -242,25 +245,29 @@ class RuleLoader(BaseResourceLoader[RuleMetadata]):
 
 
 @lru_cache(maxsize=16)
-def _get_rule_loader(rules_dir: Path | None = None) -> RuleLoader:
+def _get_rule_loader(rules_dirs: tuple[Path, ...] | None = None) -> RuleLoader:
     """Return a cached rule loader instance.
 
     The cache key is the resolved rules directory path.
     """
-    resolved = rules_dir if rules_dir is not None else Path(settings.RULES_DIR)
+    if rules_dirs is not None:
+        resolved = list(rules_dirs)
+    else:
+        resolved = [settings.DEFAULT_RESOURCES_DIR / "rules", settings.RULES_DIR]
+
     return RuleLoader(resolved)
 
 
-def get_rule_loader(rules_dir: Path | None = None) -> RuleLoader:
+def get_rule_loader(rules_dirs: tuple[Path, ...] | None = None) -> RuleLoader:
     """Get or create the global rule loader instance.
 
     Args:
-        rules_dir: Directory to scan for rules
+        rules_dirs: Directories to scan for rules
 
     Returns:
         RuleLoader instance
     """
-    return _get_rule_loader(rules_dir)
+    return _get_rule_loader(rules_dirs)
 
 
 def clear_rule_cache() -> None:

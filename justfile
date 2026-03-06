@@ -11,7 +11,7 @@ install:
     uv sync --all-extras
 
 lint:
-    uv run python devtools/lint.py
+    uv run python scripts/lint.py
 
 test:
     uv run pytest

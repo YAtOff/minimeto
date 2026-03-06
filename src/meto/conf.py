@@ -82,19 +82,28 @@ class Settings(BaseSettings):
         v.mkdir(parents=True, exist_ok=True)
         return v
 
+    # --- Resources (defaults in package) ---
+
+    DEFAULT_RESOURCES_DIR: Path = Field(
+        default=Path(__file__).parent / "resources",
+        description="Directory for default package agents/skills/rules.",
+    )
+
+    # --- Project overrides (in current working directory) ---
+
     AGENTS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "agents",
-        description="Directory for user-defined agent files.",
+        description="Directory for project-specific agent files.",
     )
 
     SKILLS_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "skills",
-        description="Directory for skill directories.",
+        description="Directory for project-specific skill directories.",
     )
 
     RULES_DIR: Path = Field(
         default=Path.cwd() / ".meto" / "rules",
-        description="Directory for rule configuration files.",
+        description="Directory for project-specific rule configuration files.",
     )
 
     # --- Agent Features ---
