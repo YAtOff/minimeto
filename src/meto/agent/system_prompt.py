@@ -59,15 +59,15 @@ SKILL_AGENTS_SECTION = """Skill-local Agents (via load_agent + run_task):
 - Only available after loading the parent skill via load_skill
 """
 
-RULES_SECTION = """## Tool Execution Protocol: Pre-Execution Context
+RULES_SECTION = """Tool Execution Protocol: Pre-Execution Context
 The system may inject relevant rules before tool execution to guide output quality.
-1. **Dynamic Re-evaluation:** After you initiate a tool_use call, the system may provide "Additional Context" before the tool result is returned.
-2. **Contextual Pivot:** If you receive context after a tool call but BEFORE the tool result:
-   - **Analyze the data:** Does this new information change your parameters? (e.g., coding standards, security restrictions, or updated data)
-   - **Refine or Proceed:** If context suggests your current tool call is suboptimal, issue a new tool call with corrected parameters.
+1. Dynamic Re-evaluation: After you initiate a tool_use call, the system may provide "Additional Context" before the tool result is returned.
+2. Contextual Pivot: If you receive context after a tool call but BEFORE the tool result:
+   - Analyze the data: Does this new information change your parameters? (e.g., coding standards, security restrictions, or updated data)
+   - Refine or Proceed: If context suggests your current tool call is suboptimal, issue a new tool call with corrected parameters.
    - If context suggests the tool is no longer needed, cancel the intent and respond directly.
    - If context is merely advisory, re-issue the same tool call to signal readiness.
-3. **State Management:** Do not assume a tool has executed until you receive a message with role `tool`.
+3. State Management: Do not assume a tool has executed until you receive a message with role `tool`.
 """
 
 
