@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 import click
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from meto.agent.history_export import (
     dump_agent_context,
@@ -13,6 +14,7 @@ from meto.agent.history_export import (
     get_context_summary,
     save_agent_context,
 )
+from meto.agent.loaders.skill_loader import get_skill_loader
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -94,6 +96,82 @@ def help(ctx: "Context"):  # pyright: ignore[reportShadowingBuiltins]
 def new(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
     """Start a new session with fresh context."""
     raise NewSessionException
+
+
+@chat_commands.command()
+@click.pass_context
+def skills(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+    """List available skills.
+
+    Shows all skills from both built-in and project-specific directories.
+    """
+    console = Console()
+    loader = get_skill_loader()
+
+    # Get all skills metadata
+    all_skills = loader._resources  # pyright: ignore[reportPrivateUsage]
+
+    if not all_skills:
+        console.print("\n[yellow]No skills available.[/]")
+        console.print("[dim]Skills can be added to:[/]")
+        console.print("[dim]  - Project: .meto/skills/<skill-name>/SKILL.md[/]")
+        console.print("[dim]  - Built-in: src/meto/resources/skills/<skill-name>/SKILL.md[/]\n")
+        return
+
+    # Determine source for each skill (built-in vs project)
+    builtin_dir = (settings.DEFAULT_RESOURCES_DIR / "skills").resolve()
+    project_dir = settings.SKILLS_DIR.resolve()
+
+    table = Table(title="Available Skills", show_header=True, header_style="bold cyan")
+    table.add_column("Name", style="green")
+    table.add_column("Description", style="white")
+    table.add_column("Source", style="dim")
+
+    builtin_count = 0
+    project_count = 0
+
+    for name in sorted(all_skills.keys()):
+        meta = all_skills[name]
+        skill_path = meta["path"].resolve()
+
+        # Determine source based on path
+        try:
+            skill_path.relative_to(builtin_dir)
+            source = "built-in"
+            icon = "📦"
+            builtin_count += 1
+        except ValueError:
+            try:
+                skill_path.relative_to(project_dir)
+                source = "project"
+                icon = "📂"
+                project_count += 1
+            except ValueError:
+                source = "other"
+                icon = "📄"
+                builtin_count += 1  # Count as built-in if from resources dir
+
+        # Truncate description if too long
+        desc = meta["description"]
+        if len(desc) > 60:
+            desc = desc[:57] + "..."
+
+        table.add_row(f"{icon} {name}", desc, source)
+
+    console.print()
+    console.print(table)
+    console.print()
+
+    # Summary line
+    total = len(all_skills)
+    parts = []
+    if builtin_count > 0:
+        parts.append(f"{builtin_count} built-in")
+    if project_count > 0:
+        parts.append(f"{project_count} project-specific")
+    summary = ", ".join(parts)
+    console.print(f"[dim]{total} skill{'s' if total != 1 else ''} available ({summary})[/]")
+    console.print()
 
 
 def _summarize_tool_args(args: str, max_len: int = 60) -> str:
