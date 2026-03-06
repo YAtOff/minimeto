@@ -17,7 +17,7 @@ just clean        # remove build artifacts
 
 # Direct uv commands
 uv run pytest                    # run tests
-uv run python devtools/lint.py   # lint
+uv run python scripts/lint.py    # lint
 uv build                         # build wheel
 uv run meto                      # run the agent REPL
 ```
@@ -35,7 +35,10 @@ This is a minimal coding agent that achieves power through simplicity: an LLM wi
 - **[cli.py](src/meto/cli.py)** - CLI interface with Typer. Supports interactive REPL (`uv run meto`) and one-shot mode (`uv run meto --one-shot`)
 - **[agent/agent_loop.py](src/meto/agent/agent_loop.py)** - The heart: tool-calling loop that executes LLM responses
 - **[agent/agent.py](src/meto/agent/agent.py)** - Agent factory creating main agents and subagents with different tool permissions
-- **[agent/tool_runner.py](src/meto/agent/tool_runner.py)** - Tool implementations (shell, read, write, edit, grep, web_fetch, etc.)
+- **[agent/tool_runner.py](src/meto/agent/tool_runner.py)** - Lightweight tool dispatcher
+- **[agent/tools/](src/meto/agent/tools/)** - Domain-specific tool implementations (file, net, task, skill, etc.)
+- **[agent/orchestrator/](src/meto/agent/orchestrator/)** - LLM client management and signal handling
+- **[agent/loaders/](src/meto/agent/loaders/)** - Unified resource loaders for agents, skills, and rules
 - **[agent/tool_registry.py](src/meto/agent/tool_registry.py)** - Runtime tool discovery registry with keyword search
 - **[agent/mcp_client.py](src/meto/agent/mcp_client.py)** - FastMCP client integration for external tool discovery
 - **[agent/reasoning_log.py](src/meto/agent/reasoning_log.py)** - Structured logging (JSONL trace files + rich stderr)
@@ -153,7 +156,7 @@ METO_PERMISSIONS_ENABLED=true  # Enable permission checks for sensitive operatio
 
 ## Linting
 
-Ruff (format + lint) + basedpyright (type checking) + codespell. Tests excluded from type checking. Run via `just lint` or `uv run python devtools/lint.py`.
+Ruff (format + lint) + basedpyright (type checking) + codespell. Tests excluded from type checking. Run via `just lint` or `uv run python scripts/lint.py`.
 
 ## MCP Integration
 
@@ -180,15 +183,19 @@ Tools are automatically discovered and registered in the runtime [ToolRegistry](
 
 ## Built-in Agents
 
-- **screenshotter** - Web page screenshots via Chrome DevTools MCP (`.meto/agents/screenshotter.md`)
+Default agents are located in `src/meto/resources/agents/`.
+
+- **screenshotter** - Web page screenshots via Chrome DevTools MCP
 - **explore** - Read-only codebase exploration
 - **code** - Code writing and editing
 - **plan** - Implementation planning
 
 ## Available Skills
 
-- **prd** - PRD generator (`.meto/skills/prd/`)
-- **context7-docs** - Context7 documentation (`.meto/skills/context7-docs/`)
+Default skills are located in `src/meto/resources/skills/`.
+
+- **prd** - PRD generator
+- **context7-docs** - Context7 documentation
 - **python-styleguide** - Python coding standards
 - **git-commit** - Git commit conventions
 - **git-worktrees** - Git worktree management
