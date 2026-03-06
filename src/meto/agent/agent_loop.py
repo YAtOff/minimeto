@@ -192,6 +192,10 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                 # Inject content if provided by hook (e.g., rules)
                 if pre_tool_hook_result.injected_content:
+                    reasoning_logger.log_injected_context(
+                        pre_tool_hook_result.injected_content,
+                        fn_name,
+                    )
                     context.history.append(
                         {
                             "role": "system",

@@ -211,3 +211,10 @@ class ReasoningLogger:
         self._log(logging.INFO, "System prompt logged")
         self.console.print("[dim]System prompt:[/]")
         self.console.print(f"[dim]{truncated}[/]")
+
+    def log_injected_context(self, content: str, tool_name: str | None = None) -> None:
+        """Log context injected by pre-tool hooks (e.g., rule injection)."""
+        tool_info = f" for {tool_name}" if tool_name else ""
+        self._log(logging.INFO, f"Context injected{tool_info}: {content[:100]}...")
+        self.console.print(f"[dim yellow]⚠️  Context injected{tool_info}:[/]")
+        self.console.print(f"[dim yellow]{content}[/]")
