@@ -482,18 +482,19 @@ def register_tool_handler(tool_name: str, handler: ToolHandler) -> None:
 # - "errors_only": Only log when tool execution fails
 # - "full": Log both tool selection and execution results
 TOOL_LOG_STRATEGY: dict[str, str] = {
-    # Quiet tools - log only errors
-    "read_file": "errors_only",
-    "write_file": "errors_only",
-    "fetch": "errors_only",
-    "grep_search": "errors_only",
-    "load_skill": "errors_only",
-    "load_agent": "errors_only",
-    "manage_todos": "errors_only",
-    "list_dir": "errors_only",
-    # Verbose tools - log everything
+    # Log invocation with params, but skip results
+    "write_file": "invocation_only",
+    "fetch": "invocation_only",
+    "load_skill": "invocation_only",
+    "load_agent": "invocation_only",
+    "list_dir": "invocation_only",
+    "manage_todos": "invocation_only",
+    "run_task": "invocation_only",  # Changed from "full"
+    # Log both invocation and results
+    "read_file": "full",
+    "grep_search": "full",
+    # Keep existing full logging
     "shell": "full",
-    "run_task": "full",
     "ask_user_question": "full",
     "search_available_tools": "full",
 }
@@ -540,8 +541,9 @@ def run_tool(
     # Get log strategy for this tool (default to "full" for unknown tools)
     log_strategy = TOOL_LOG_STRATEGY.get(tool_name, "full")
 
-    # Only log tool selection for verbose tools
-    if logger and log_strategy == "full":
+    # Log tool selection based on strategy
+    strategies_with_invocation = {"full", "invocation_only"}
+    if logger and log_strategy in strategies_with_invocation:
         logger.log_tool_selection(tool_name, parameters)
 
     tool_output = ""
@@ -555,8 +557,9 @@ def run_tool(
     else:
         try:
             tool_output = handler(context, parameters)
-            # Only log success for verbose tools
-            if logger and log_strategy == "full":
+            # Log success based on strategy
+            strategies_with_result = {"full", "result_only"}
+            if logger and log_strategy in strategies_with_result:
                 logger.log_tool_execution(tool_name, tool_output, error=False)
         except Exception as e:
             tool_output = str(e)
