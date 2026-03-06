@@ -11,471 +11,30 @@ Architectural constraint:
 
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
 from collections.abc import Callable
-from datetime import datetime
-from pathlib import Path
-from typing import Any, cast
-from urllib.parse import urlparse
+from typing import Any
 
-import httpx
-from prompt_toolkit import PromptSession
-from prompt_toolkit.enums import EditingMode
-from rich.console import Console
-from rich.panel import Panel
-
-from meto.agent.agent import Agent
-from meto.agent.context import Context, PendingTool
-from meto.agent.loaders import get_skill_loader
-from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
-from meto.agent.tool_registry import registry
-from meto.conf import settings
+from meto.agent.context import Context
+from meto.agent.tools.file_tools import (
+    handle_grep_search,
+    handle_list_dir,
+    handle_read_file,
+    handle_shell,
+    handle_write_file,
+)
+from meto.agent.tools.interactive_tools import handle_ask_user_question
+from meto.agent.tools.net_tools import handle_fetch
+from meto.agent.tools.registry_tools import handle_search_available_tools
+from meto.agent.tools.skill_tools import handle_load_agent, handle_load_skill
+from meto.agent.tools.task_tools import handle_manage_todos, handle_run_task
 
 # Tool runtime / execution.
 #
 # Important architectural rule:
 # - This module must not import `meto.agent.loop` or `meto.cli`.
 
-
-def _list_directory(
-    _context: Context, path: str = ".", recursive: bool = False, include_hidden: bool = False
-) -> str:
-    """List directory contents with structured output."""
-
-    try:
-        dir_path = Path(path).expanduser().resolve()
-        if not dir_path.exists():
-            return f"Error: Path does not exist: {path}"
-        if not dir_path.is_dir():
-            return f"Error: Not a directory: {path}"
-    except OSError as ex:
-        return f"Error accessing path '{path}': {ex}"
-
-    lines: list[str] = []
-    lines.append(f"{dir_path}:")
-
-    try:
-        if recursive:
-            entries = sorted(dir_path.rglob("*"), key=lambda p: (p.parent, p.name))
-        else:
-            entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
-
-        for entry in entries:
-            if not include_hidden and entry.name.startswith("."):
-                continue
-
-            entry_type = "dir" if entry.is_dir() else "file"
-            size = 0
-            if entry.is_file():
-                try:
-                    size = entry.stat().st_size
-                except OSError:
-                    pass
-
-            size_str = format_size(size) if entry.is_file() else ""
-            try:
-                mtime = datetime.fromtimestamp(entry.stat().st_mtime)
-                mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
-            except OSError:
-                mtime_str = "?"
-
-            name = entry.name
-            if recursive:
-                rel_path = entry.relative_to(dir_path)
-                name = str(rel_path)
-                if entry.is_dir():
-                    name = str(rel_path) + "/"
-
-            size_col = f"    {size_str:>8}" if size_str else "           "
-            lines.append(f"  {name:<30} ({entry_type:<4}){size_col}    {mtime_str}")
-
-    except PermissionError:
-        return f"Error: Permission denied accessing: {path}"
-    except OSError as ex:
-        return f"Error listing directory: {ex}"
-
-    if len(lines) == 1:
-        lines.append("  (empty directory)")
-
-    return "\n".join(lines)
-
-
-def _read_file(_context: Context, path: str) -> str:
-    """Read file contents with proper error handling."""
-
-    try:
-        file_path = Path(path).expanduser().resolve()
-        if not file_path.exists():
-            return f"Error: File does not exist: {path}"
-        if not file_path.is_file():
-            return f"Error: Not a file: {path}"
-
-        content = file_path.read_text(encoding="utf-8")
-        return truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
-    except UnicodeDecodeError:
-        return f"Error: Cannot decode file {path} as UTF-8 text"
-    except PermissionError:
-        return f"Error: Permission denied reading {path}"
-    except OSError as ex:
-        return f"Error reading file {path}: {ex}"
-
-
-def _write_file(_context: Context, path: str, content: str) -> str:
-    """Write content to a file with proper error handling."""
-
-    try:
-        file_path = Path(path).expanduser().resolve()
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(content, encoding="utf-8")
-        return f"Successfully wrote {len(content)} chars to {path}"
-    except PermissionError:
-        return f"Error: Permission denied writing to {path}"
-    except IsADirectoryError:
-        return f"Error: Path is a directory, not a file: {path}"
-    except OSError as ex:
-        return f"Error writing file {path}: {ex}"
-
-
-def _run_grep_search(
-    _context: Context, pattern: str, path: str = ".", case_insensitive: bool = False
-) -> str:
-    """Search for pattern in files using ripgrep (rg) with fallback to grep/Select-String."""
-
-    if not pattern.strip():
-        return "Error: Empty search pattern"
-
-    try:
-        search_path = Path(path).expanduser().resolve()
-        if not search_path.exists():
-            return f"Error: Path does not exist: {path}"
-    except OSError as ex:
-        return f"Error accessing path '{path}': {ex}"
-
-    rg = shutil.which("rg")
-    if rg:
-        args: list[str] = [
-            rg,
-            "--line-number",
-            "--no-heading",
-        ]
-        if case_insensitive:
-            args.append("-i")
-
-        # `--` ensures patterns beginning with '-' are not interpreted as options.
-        args += ["--", pattern, str(search_path)]
-
-        try:
-            completed = subprocess.run(
-                args,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=settings.TOOL_TIMEOUT_SECONDS,
-                cwd=os.getcwd(),
-            )
-        except subprocess.TimeoutExpired:
-            return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
-        except OSError as ex:
-            return f"(search execution error: {ex})"
-
-        output = (completed.stdout or "") + (completed.stderr or "")
-        output = output.strip() or "(empty)"
-        return truncate(output, settings.MAX_TOOL_OUTPUT_CHARS)
-    else:
-        runner = pick_shell_runner()
-        if runner and ("bash" in runner[0] or "sh" in runner[0]):
-            flag = "-i" if case_insensitive else ""
-            cmd = f'grep -R {flag} -n "{pattern}" "{path}" 2>/dev/null || true'
-        elif runner and ("powershell" in runner[0] or "pwsh" in runner[0]):
-            flag = "" if case_insensitive else "-CaseSensitive"
-            cmd = (
-                f'Select-String -Path "{path}\\*" -Pattern "{pattern}" {flag} '
-                "| Select-Object -First 100"
-            )
-        else:
-            return "Error: No suitable search tool found (need rg, grep, or PowerShell)"
-
-    return run_shell(cmd)
-
-
-def _fetch(_context: Context, url: str, max_bytes: int = 100000) -> str:
-    """Fetch URL via HTTP GET, return response body as text (truncated)."""
-
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        return f"Error fetching {url}: unsupported URL scheme '{parsed.scheme}'"
-
-    try:
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(url, headers={"User-Agent": "meto/0"})
-            response.raise_for_status()
-            content = response.content[: max_bytes + 1]
-            return truncate(content.decode("utf-8", errors="replace"), max_bytes)
-    except httpx.HTTPStatusError as e:
-        return f"Error fetching {url}: {e.response.status_code} {e.response.reason_phrase}"
-    except httpx.TimeoutException:
-        return f"Error fetching {url}: timeout after 10s"
-    except httpx.HTTPError as e:
-        return f"Error fetching {url}: {e}"
-    except OSError as ex:
-        return f"Error fetching {url}: {ex}"
-
-
-def _ask_user_question(_context: Context, question: str) -> str:
-    """Ask user a question using prompt_toolkit and return response."""
-
-    console = Console()
-    session = PromptSession(editing_mode=EditingMode.EMACS)
-    try:
-        # Print the question with Rich formatting (prompt_toolkit doesn't interpret Rich markup)
-        console.print()
-        console.print(f"[bold yellow]?[/bold yellow] [bold cyan]{question}[/bold cyan]")
-        console.print("[dim]Your answer:[/dim] ", end="")
-
-        # Get input with prompt_toolkit
-        response = session.prompt("")
-        return response
-    except (EOFError, KeyboardInterrupt):
-        return "(user cancelled input)"
-    except OSError as ex:
-        return f"(error getting user input: {ex})"
-
-
-def _manage_todos(context: Context, items: list[dict[str, Any]]) -> str:
-    """Update the todo list for a session."""
-
-    try:
-        result = context.todos.update(items)
-        context.todos.print_rich()
-        return result
-    except ValueError as e:
-        return f"Error: {e}"
-
-
-def _execute_task(
-    context: Context,
-    prompt: str,
-    agent_name: str,
-    description: str | None = None,
-) -> str:
-    """Execute task in isolated subagent via direct `run_agent_loop` call."""
-
-    from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
-
-    console = Console()
-
-    # Build banner content
-    agent_line = f"[bold cyan]{agent_name}[/bold cyan]"
-    if description:
-        banner_content = f"{agent_line}\n[dim]{description}[/dim]"
-    else:
-        banner_content = agent_line
-
-    # Show start banner
-    console.print()
-    console.print(
-        Panel(
-            banner_content,
-            title="[dim]-> Starting subagent[/dim]",
-            border_style="magenta",
-            padding=(0, 1),
-        )
-    )
-
-    # Run subagent
-    try:
-        # Pass active_skill context to subagent creation
-        agent = Agent.subagent(agent_name, skill_name=context.active_skill)
-        output = "\n".join(run_agent_loop(agent, prompt, context.fork()))
-        result = truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
-    except Exception as ex:
-        result = f"(subagent error: {ex})"
-
-    # Show end banner
-    console.print(
-        Panel(
-            banner_content,
-            title="[dim]<- Subagent finished[/dim]",
-            border_style="magenta",
-            padding=(0, 1),
-        )
-    )
-    console.print()
-
-    return result
-
-
-def _load_skill(context: Context, skill_name: str) -> str:
-    """Load skill content and return it."""
-    try:
-        skill_loader = get_skill_loader()
-
-        # Validate skill exists first
-        if not skill_loader.has_skill(skill_name):
-            available = ", ".join(skill_loader.list_skills())
-            return (
-                f"Error: Skill '{skill_name}' not found. Available skills: {available or '(none)'}"
-            )
-
-        # Set active skill in context
-        context.active_skill = skill_name
-
-        # Get skill content
-        content = skill_loader.get_skill_content(skill_name)
-
-        # Add hint about available agents
-        agents = skill_loader.list_skill_agents(skill_name)
-        if agents:
-            agent_list = ", ".join(agents)
-            content += f"\n\n---\n\nThis skill includes the following specialized agents (use load_agent to access them):\n{agent_list}\n"
-
-        return content
-    except ValueError as e:
-        return f"Error: {e}"
-    except OSError as ex:
-        return f"Error: Failed to load skill '{skill_name}': {ex}"
-
-
-def _load_agent(context: Context, agent_name: str) -> str:
-    """Load a skill-local agent configuration."""
-    import json
-
-    from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
-
-    # Check if a skill is currently active
-    if not context.active_skill:
-        return "Error: No skill is currently active. Use load_skill first to load a skill, then use load_agent to access its agents."
-
-    try:
-        skill_loader = get_skill_loader()
-        agent_config = skill_loader.get_skill_agent_config(context.active_skill, agent_name)
-
-        # Return as JSON for easy parsing
-        return json.dumps(agent_config, indent=2)
-
-    except SkillAgentNotFoundError as e:
-        # Provide helpful error message with available agents
-        skill_loader = get_skill_loader()
-        available = skill_loader.list_skill_agents(context.active_skill)
-        if available:
-            available_str = ", ".join(available)
-            return f"Error: {e}\nAvailable agents: {available_str}"
-        return f"Error: {e}"
-    except SkillAgentValidationError as e:
-        return f"Error: {e}"
-    except Exception as ex:
-        return (
-            f"Error: Failed to load agent '{agent_name}' from skill '{context.active_skill}': {ex}"
-        )
-
-
-def _search_available_tools(context: Context, query: str, top_k: int = 3) -> str:
-    """Search registry tools and stage selected tools for next loop turn."""
-    results = registry.search(query, top_k=top_k)
-    if not results:
-        return "No matching tools found."
-
-    pending_names = {
-        pending_tool.schema.get("function", {}).get("name")
-        for pending_tool in context.pending_tools
-    }
-
-    lines: list[str] = []
-    for tool in results:
-        if tool.name not in pending_names:
-            context.pending_tools.append(PendingTool(schema=tool.schema, handler=tool.handler))
-            pending_names.add(tool.name)
-        lines.append(f"{tool.name}: {tool.description}")
-
-    return "\n".join(lines)
-
-
 # Type alias for tool handler functions
 ToolHandler = Callable[[Context, dict[str, Any]], str]
-
-
-def _handle_shell(_context: Context, parameters: dict[str, Any]) -> str:
-    """Handle shell command execution."""
-    command = parameters.get("command", "")
-    return run_shell(command)
-
-
-def _handle_list_dir(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle directory listing."""
-    path = parameters.get("path", ".")
-    recursive = parameters.get("recursive", False)
-    include_hidden = parameters.get("include_hidden", False)
-    return _list_directory(context, path, recursive, include_hidden)
-
-
-def _handle_read_file(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle file reading."""
-    path = parameters.get("path", "")
-    return _read_file(context, path)
-
-
-def _handle_write_file(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle file writing."""
-    path = parameters.get("path", "")
-    content = parameters.get("content", "")
-    return _write_file(context, path, content)
-
-
-def _handle_grep_search(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle pattern search."""
-    pattern = parameters.get("pattern", "")
-    path = parameters.get("path", ".")
-    case_insensitive = parameters.get("case_insensitive", False)
-    return _run_grep_search(context, pattern, path, case_insensitive)
-
-
-def _handle_fetch(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle URL fetching."""
-    url = parameters.get("url", "")
-    max_bytes = parameters.get("max_bytes", 100000)
-    return _fetch(context, url, max_bytes)
-
-
-def _handle_ask_user_question(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle user question prompting."""
-    question = parameters.get("question", "")
-    return _ask_user_question(context, question)
-
-
-def _handle_manage_todos(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle user question prompting."""
-    items = parameters.get("items", [])
-    return _manage_todos(context, cast(list[dict[str, Any]], items))
-
-
-def _handle_run_task(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle subagent task execution."""
-    description = cast(str, parameters.get("description", ""))
-    prompt = cast(str, parameters.get("prompt", ""))
-    agent_name = cast(str, parameters.get("agent_name", ""))
-    return _execute_task(context, prompt, agent_name, description)
-
-
-def _handle_load_skill(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle skill loading."""
-    skill_name = parameters.get("skill_name", "")
-    return _load_skill(context, skill_name)
-
-
-def _handle_load_agent(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle skill-local agent loading."""
-    agent_name = parameters.get("agent_name", "")
-    return _load_agent(context, agent_name)
-
-
-def _handle_search_available_tools(context: Context, parameters: dict[str, Any]) -> str:
-    """Handle runtime tool discovery."""
-    query = cast(str, parameters.get("query", ""))
-    top_k = cast(int, parameters.get("top_k", 3))
-    return _search_available_tools(context, query, top_k)
 
 
 def register_tool_handler(tool_name: str, handler: ToolHandler) -> None:
@@ -494,7 +53,7 @@ TOOL_LOG_STRATEGY: dict[str, str] = {
     "load_agent": "invocation_only",
     "list_dir": "invocation_only",
     "manage_todos": "invocation_only",
-    "run_task": "invocation_only",  # Changed from "full"
+    "run_task": "invocation_only",
     # Log both invocation and results
     "read_file": "full",
     "grep_search": "full",
@@ -507,18 +66,18 @@ TOOL_LOG_STRATEGY: dict[str, str] = {
 
 # Dispatch table mapping tool names to their handler functions
 _TOOL_HANDLERS: dict[str, ToolHandler] = {
-    "shell": _handle_shell,
-    "list_dir": _handle_list_dir,
-    "read_file": _handle_read_file,
-    "write_file": _handle_write_file,
-    "grep_search": _handle_grep_search,
-    "fetch": _handle_fetch,
-    "ask_user_question": _handle_ask_user_question,
-    "manage_todos": _handle_manage_todos,
-    "search_available_tools": _handle_search_available_tools,
-    "run_task": _handle_run_task,
-    "load_skill": _handle_load_skill,
-    "load_agent": _handle_load_agent,
+    "shell": handle_shell,
+    "list_dir": handle_list_dir,
+    "read_file": handle_read_file,
+    "write_file": handle_write_file,
+    "grep_search": handle_grep_search,
+    "fetch": handle_fetch,
+    "ask_user_question": handle_ask_user_question,
+    "manage_todos": handle_manage_todos,
+    "search_available_tools": handle_search_available_tools,
+    "run_task": handle_run_task,
+    "load_skill": handle_load_skill,
+    "load_agent": handle_load_agent,
 }
 
 

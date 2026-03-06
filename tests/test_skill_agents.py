@@ -12,7 +12,7 @@ from meto.agent.context import Context
 from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
 from meto.agent.loaders.skill_loader import SkillLoader, clear_skill_cache
 from meto.agent.todo import TodoManager
-from meto.agent.tool_runner import _load_agent
+from meto.agent.tools.skill_tools import load_agent as _load_agent
 
 
 @pytest.fixture
@@ -276,7 +276,7 @@ class TestLoadAgentTool:
         # get_skill_loader() returns a SkillLoader, so we return skill_loader directly
         with patch("meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader):
             # Need to patch at call site
-            with patch("meto.agent.tool_runner.get_skill_loader", return_value=skill_loader):
+            with patch("meto.agent.tools.skill_tools.get_skill_loader", return_value=skill_loader):
                 result = _load_agent(context, "reviewer")
                 assert "Code reviewer agent" in result
                 assert "read_file" in result
@@ -287,7 +287,7 @@ class TestLoadAgentTool:
         context.active_skill = "test_skill"
 
         with patch("meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader):
-            with patch("meto.agent.tool_runner.get_skill_loader", return_value=skill_loader):
+            with patch("meto.agent.tools.skill_tools.get_skill_loader", return_value=skill_loader):
                 result = _load_agent(context, "nonexistent")
                 assert "Error:" in result
                 assert "Available agents:" in result
