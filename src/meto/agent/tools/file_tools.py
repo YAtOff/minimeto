@@ -75,8 +75,13 @@ def list_directory(
     return "\n".join(lines)
 
 
-def read_file(_context: Context, path: str) -> str:
-    """Read file contents with proper error handling."""
+def read_file(
+    _context: Context,
+    path: str,
+    start_line: int | None = None,
+    end_line: int | None = None,
+) -> str:
+    """Read file contents with proper error handling and optional line range."""
 
     try:
         file_path = Path(path).expanduser().resolve()
@@ -85,7 +90,30 @@ def read_file(_context: Context, path: str) -> str:
         if not file_path.is_file():
             return f"Error: Not a file: {path}"
 
-        content = file_path.read_text(encoding="utf-8")
+        lines = file_path.read_text(encoding="utf-8").splitlines()
+        total_lines = len(lines)
+
+        if start_line is not None or end_line is not None:
+            # 1-based indexing for users
+            start = (start_line - 1) if start_line is not None else 0
+            end = end_line if end_line is not None else total_lines
+
+            # Bounds checking
+            start = max(0, min(start, total_lines))
+            end = max(0, min(end, total_lines))
+
+            if start >= end:
+                return f"Error: Invalid range {start_line}-{end_line} for file with {total_lines} lines"
+
+            selected_lines = lines[start:end]
+            content = "\n".join(selected_lines)
+            if end < total_lines:
+                content += "\n..."
+
+            header = f"Reading lines {start + 1}-{end} of {total_lines} from {path}:\n"
+            return header + truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
+
+        content = "\n".join(lines)
         return truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
     except UnicodeDecodeError:
         return f"Error: Cannot decode file {path} as UTF-8 text"
@@ -93,6 +121,50 @@ def read_file(_context: Context, path: str) -> str:
         return f"Error: Permission denied reading {path}"
     except OSError as ex:
         return f"Error reading file {path}: {ex}"
+
+
+def replace_text_in_file(_context: Context, path: str, old_str: str, new_str: str) -> str:
+    """Replace exactly one occurrence of old_str with new_str in a file."""
+    try:
+        file_path = Path(path).expanduser().resolve()
+        if not file_path.exists():
+            return f"Error: File does not exist: {path}"
+
+        content = file_path.read_text(encoding="utf-8")
+        occurrences = content.count(old_str)
+
+        if occurrences == 0:
+            return f"Error: Could not find '{old_str}' in {path}"
+        if occurrences > 1:
+            return (
+                f"Error: Found {occurrences} occurrences of '{old_str}' in {path}. "
+                "Please provide more context to make the replacement unique."
+            )
+
+        new_content = content.replace(old_str, new_str)
+        file_path.write_text(new_content, encoding="utf-8")
+        return f"Successfully replaced '{old_str}' with '{new_str}' in {path}"
+    except Exception as ex:
+        return f"Error replacing text in {path}: {ex}"
+
+
+def insert_in_file(_context: Context, path: str, insert_line: int, new_str: str) -> str:
+    """Insert text at a specific line in a file."""
+    try:
+        file_path = Path(path).expanduser().resolve()
+        if not file_path.exists():
+            return f"Error: File does not exist: {path}"
+
+        lines = file_path.read_text(encoding="utf-8").splitlines()
+
+        # 1-based indexing
+        idx = max(0, min(insert_line - 1, len(lines)))
+        lines.insert(idx, new_str)
+
+        file_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return f"Successfully inserted text at line {insert_line} in {path}"
+    except Exception as ex:
+        return f"Error inserting text in {path}: {ex}"
 
 
 def write_file(_context: Context, path: str, content: str) -> str:
@@ -191,7 +263,25 @@ def handle_list_dir(context: Context, parameters: dict[str, Any]) -> str:
 def handle_read_file(context: Context, parameters: dict[str, Any]) -> str:
     """Handle file reading."""
     path = parameters.get("path", "")
-    return read_file(context, path)
+    start_line = parameters.get("start_line")
+    end_line = parameters.get("end_line")
+    return read_file(context, path, start_line, end_line)
+
+
+def handle_replace_text_in_file(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle file text replacement."""
+    path = parameters.get("path", "")
+    old_str = parameters.get("old_str", "")
+    new_str = parameters.get("new_str", "")
+    return replace_text_in_file(context, path, old_str, new_str)
+
+
+def handle_insert_in_file(context: Context, parameters: dict[str, Any]) -> str:
+    """Handle text insertion in file."""
+    path = parameters.get("path", "")
+    insert_line = parameters.get("insert_line", 1)
+    new_str = parameters.get("new_str", "")
+    return insert_in_file(context, path, insert_line, new_str)
 
 
 def handle_write_file(context: Context, parameters: dict[str, Any]) -> str:

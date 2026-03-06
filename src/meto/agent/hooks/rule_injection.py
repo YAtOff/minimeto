@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class RuleInjectionHook(PreToolUseHook):
     """Inject relevant rules before file operations.
 
-    When a write_file or edit_file tool is called, this hook checks for
+    When a write_file or editing tool is called, this hook checks for
     matching rules in .meto/rules/ and injects them into the conversation
     context to guide the LLM's output.
 
@@ -29,7 +29,11 @@ class RuleInjectionHook(PreToolUseHook):
     in the conversation context for subsequent operations.
     """
 
-    matched_tools: list[str] | None = ["write_file", "edit_file"]
+    matched_tools: list[str] | None = [
+        "write_file",
+        "replace_text_in_file",
+        "insert_in_file",
+    ]
 
     # Class-level set to track injected rules across hook instances
     _injected_rules: set[str] = set()
@@ -56,8 +60,7 @@ class RuleInjectionHook(PreToolUseHook):
             return HookResult(success=True)
 
         # Extract filename from tool arguments
-        # write_file uses 'path', edit_file uses 'file_path'
-        filename = self.arguments.get("path") or self.arguments.get("file_path", "")
+        filename = self.arguments.get("path", "")
         if not filename:
             return HookResult(success=True)
 

@@ -5,11 +5,15 @@ import pytest
 from meto.agent.context import Context
 from meto.agent.tools.file_tools import (
     handle_grep_search,
+    handle_insert_in_file,
     handle_list_dir,
     handle_read_file,
+    handle_replace_text_in_file,
     handle_write_file,
+    insert_in_file,
     list_directory,
     read_file,
+    replace_text_in_file,
     run_grep_search,
     write_file,
 )
@@ -46,6 +50,18 @@ def test_read_file_success(tmp_path, mock_context):
     assert result == content
 
 
+def test_read_file_range(tmp_path, mock_context):
+    file_path = tmp_path / "range.txt"
+    content = "line1\nline2\nline3\nline4\nline5"
+    file_path.write_text(content)
+
+    result = read_file(mock_context, str(file_path), start_line=2, end_line=4)
+    assert "lines 2-4" in result
+    assert "line2\nline3\nline4" in result
+    assert "line1" not in result
+    assert "line5" not in result
+
+
 def test_read_file_not_found(mock_context):
     result = read_file(mock_context, "/non/existent/file")
     assert "Error: File does not exist" in result
@@ -58,6 +74,35 @@ def test_write_file_success(tmp_path, mock_context):
     result = write_file(mock_context, str(file_path), content)
     assert "Successfully wrote" in result
     assert file_path.read_text() == content
+
+
+def test_replace_text_in_file_success(tmp_path, mock_context):
+    file_path = tmp_path / "replace.txt"
+    content = "hello world"
+    file_path.write_text(content)
+
+    result = replace_text_in_file(mock_context, str(file_path), "world", "meto")
+    assert "Successfully replaced" in result
+    assert file_path.read_text() == "hello meto"
+
+
+def test_replace_text_in_file_duplicate(tmp_path, mock_context):
+    file_path = tmp_path / "duplicate.txt"
+    content = "hello world world"
+    file_path.write_text(content)
+
+    result = replace_text_in_file(mock_context, str(file_path), "world", "meto")
+    assert "Error: Found 2 occurrences" in result
+
+
+def test_insert_in_file_success(tmp_path, mock_context):
+    file_path = tmp_path / "insert.txt"
+    content = "line1\nline2"
+    file_path.write_text(content)
+
+    result = insert_in_file(mock_context, str(file_path), 2, "inserted")
+    assert "Successfully inserted" in result
+    assert file_path.read_text() == "line1\ninserted\nline2\n"
 
 
 def test_run_grep_search_mock(mock_context):
@@ -83,10 +128,28 @@ def test_handle_list_dir(mock_context):
 def test_handle_read_file(mock_context):
     with patch("meto.agent.tools.file_tools.read_file") as mock_read:
         mock_read.return_value = "file content"
-        params = {"path": "test.txt"}
+        params = {"path": "test.txt", "start_line": 1, "end_line": 10}
         result = handle_read_file(mock_context, params)
         assert result == "file content"
-        mock_read.assert_called_once_with(mock_context, "test.txt")
+        mock_read.assert_called_once_with(mock_context, "test.txt", 1, 10)
+
+
+def test_handle_replace_text_in_file(mock_context):
+    with patch("meto.agent.tools.file_tools.replace_text_in_file") as mock_replace:
+        mock_replace.return_value = "success"
+        params = {"path": "test.txt", "old_str": "old", "new_str": "new"}
+        result = handle_replace_text_in_file(mock_context, params)
+        assert result == "success"
+        mock_replace.assert_called_once_with(mock_context, "test.txt", "old", "new")
+
+
+def test_handle_insert_in_file(mock_context):
+    with patch("meto.agent.tools.file_tools.insert_in_file") as mock_insert:
+        mock_insert.return_value = "success"
+        params = {"path": "test.txt", "insert_line": 5, "new_str": "content"}
+        result = handle_insert_in_file(mock_context, params)
+        assert result == "success"
+        mock_insert.assert_called_once_with(mock_context, "test.txt", 5, "content")
 
 
 def test_handle_write_file(mock_context):

@@ -18,7 +18,7 @@ from rich.console import Console
 
 def _load_client_spec() -> dict[str, Any]:
     """Load client spec from .mcp.json, resolving dynamic values at runtime."""
-    config_path = Path.cwd() / ".meto" / "mcp.json"
+    config_path = Path.cwd() / ".mcp.json"
     with open(config_path) as f:
         spec = json.load(f)
     # Inject PATH env so commands can be found

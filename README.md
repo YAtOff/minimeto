@@ -97,14 +97,17 @@ Environment variables (`.env` supported):
 ### Tools Available
 
 - **shell**: Execute bash/PowerShell commands
-- **read_files**: Read file contents
+- **list_dir**: List directory contents
+- **read_file**: Read file contents (supports line ranges)
 - **write_file**: Create or overwrite files
-- **edit_file**: Apply targeted edits to files
-- **grep**: Search code with regex patterns
-- **web_fetch**: Fetch and parse web content
+- **replace_text_in_file**: Surgical string replacement (exactly one occurrence)
+- **insert_in_file**: Insert text at specific line numbers
+- **grep_search**: Search code with regex patterns
+- **fetch**: Fetch and parse web content
 - **run_task**: Spawn subagent for isolated subtasks
 - **load_skill**: Load domain expertise modules on-demand
-- **manage_todos***: Task tracking (create, update, list, get)
+- **manage_todos**: Task tracking (multi-step tasks)
+- **ask_user_question**: Ask user for clarification
 
 ## Customization
 

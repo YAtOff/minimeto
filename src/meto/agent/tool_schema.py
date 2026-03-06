@@ -81,7 +81,7 @@ TOOLS: list[dict[str, Any]] = [
             "name": "read_file",
             "description": (
                 "Read the contents of a file and return them as text. "
-                "Use this for reading configuration files, source code, or any text file."
+                "Optionally specify a line range."
             ),
             "parameters": {
                 "type": "object",
@@ -89,9 +89,72 @@ TOOLS: list[dict[str, Any]] = [
                     "path": {
                         "type": "string",
                         "description": "Path to the file to read.",
-                    }
+                    },
+                    "start_line": {
+                        "type": "integer",
+                        "description": "The 1-based line number to start reading from (inclusive).",
+                    },
+                    "end_line": {
+                        "type": "integer",
+                        "description": "The 1-based line number to end reading at (exclusive).",
+                    },
                 },
                 "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "replace_text_in_file",
+            "description": (
+                "Replace exactly one occurrence of a string with another string in a file. "
+                "Always provide enough context in old_str to ensure it matches exactly once."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to modify.",
+                    },
+                    "old_str": {
+                        "type": "string",
+                        "description": "The exact string to replace.",
+                    },
+                    "new_str": {
+                        "type": "string",
+                        "description": "The replacement string.",
+                    },
+                },
+                "required": ["path", "old_str", "new_str"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "insert_in_file",
+            "description": "Insert text at a specific 1-based line number in a file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to the file to modify.",
+                    },
+                    "insert_line": {
+                        "type": "integer",
+                        "description": "The 1-based line number where the text should be inserted.",
+                    },
+                    "new_str": {
+                        "type": "string",
+                        "description": "The text to insert.",
+                    },
+                },
+                "required": ["path", "insert_line", "new_str"],
                 "additionalProperties": False,
             },
         },

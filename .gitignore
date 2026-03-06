@@ -191,7 +191,7 @@ cython_debug/
 # Project specific ignores
 .plans/
 .prompts/
-.meto/mcp.json
+.mcp.json
 ralph/*
 !ralph/ralph.sh
 !ralph/prompt.md

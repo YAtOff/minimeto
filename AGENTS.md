@@ -90,9 +90,10 @@ This is a minimal coding agent that achieves power through simplicity: an LLM wi
 
 - `shell` - Execute bash/PowerShell commands
 - `list_dir` - List directory contents
-- `read_file` - Read file contents
+- `read_file` - Read file contents (supports optional `start_line` and `end_line` for range reading)
 - `write_file` - Create/overwrite files
-- `edit_file` - Apply targeted edits (string replacement)
+- `replace_text_in_file` - Replace exactly one occurrence of a string (preferred for surgical edits)
+- `insert_in_file` - Insert text at a specific line number
 - `grep_search` - Search code with regex
 - `fetch` - Fetch and parse web content
 - `run_task` - Spawn subagent for isolated subtasks

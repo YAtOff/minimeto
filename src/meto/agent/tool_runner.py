@@ -17,8 +17,10 @@ from typing import Any
 from meto.agent.context import Context
 from meto.agent.tools.file_tools import (
     handle_grep_search,
+    handle_insert_in_file,
     handle_list_dir,
     handle_read_file,
+    handle_replace_text_in_file,
     handle_shell,
     handle_write_file,
 )
@@ -48,6 +50,8 @@ def register_tool_handler(tool_name: str, handler: ToolHandler) -> None:
 TOOL_LOG_STRATEGY: dict[str, str] = {
     # Log invocation with params, but skip results
     "write_file": "invocation_only",
+    "replace_text_in_file": "invocation_only",
+    "insert_in_file": "invocation_only",
     "fetch": "invocation_only",
     "load_skill": "invocation_only",
     "load_agent": "invocation_only",
@@ -70,6 +74,8 @@ _TOOL_HANDLERS: dict[str, ToolHandler] = {
     "list_dir": handle_list_dir,
     "read_file": handle_read_file,
     "write_file": handle_write_file,
+    "replace_text_in_file": handle_replace_text_in_file,
+    "insert_in_file": handle_insert_in_file,
     "grep_search": handle_grep_search,
     "fetch": handle_fetch,
     "ask_user_question": handle_ask_user_question,
