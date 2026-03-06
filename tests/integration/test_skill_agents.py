@@ -308,7 +308,7 @@ class TestAgentSubagentWithSkill:
     def test_subagent_falls_back_to_global(self, skill_loader: SkillLoader) -> None:
         """Test that subagent falls back to global agents when skill agent not found."""
         # Create a global agent
-        global_agents_dir = Path(__file__).parent.parent / ".meto" / "agents"
+        global_agents_dir = Path(__file__).parent.parent.parent / ".meto" / "agents"
         global_agents_dir.mkdir(parents=True, exist_ok=True)
         global_agent_file = global_agents_dir / "global_test.md"
         global_agent_file.write_text(

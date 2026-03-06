@@ -1,0 +1,107 @@
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from meto.agent.context import Context
+from meto.agent.tools.file_tools import (
+    handle_grep_search,
+    handle_list_dir,
+    handle_read_file,
+    handle_write_file,
+    list_directory,
+    read_file,
+    run_grep_search,
+    write_file,
+)
+
+
+@pytest.fixture
+def mock_context():
+    return MagicMock(spec=Context)
+
+
+def test_list_directory_exists(tmp_path, mock_context):
+    # Create some files and dirs
+    (tmp_path / "file1.txt").write_text("hello")
+    (tmp_path / "subdir").mkdir()
+    (tmp_path / "subdir" / "file2.txt").write_text("world")
+
+    result = list_directory(mock_context, str(tmp_path))
+    assert str(tmp_path) in result
+    assert "file1.txt" in result
+    assert "subdir" in result
+
+
+def test_list_directory_not_found(mock_context):
+    result = list_directory(mock_context, "/non/existent/path")
+    assert "Error: Path does not exist" in result
+
+
+def test_read_file_success(tmp_path, mock_context):
+    file_path = tmp_path / "test.txt"
+    content = "test content"
+    file_path.write_text(content)
+
+    result = read_file(mock_context, str(file_path))
+    assert result == content
+
+
+def test_read_file_not_found(mock_context):
+    result = read_file(mock_context, "/non/existent/file")
+    assert "Error: File does not exist" in result
+
+
+def test_write_file_success(tmp_path, mock_context):
+    file_path = tmp_path / "new_file.txt"
+    content = "new content"
+
+    result = write_file(mock_context, str(file_path), content)
+    assert "Successfully wrote" in result
+    assert file_path.read_text() == content
+
+
+def test_run_grep_search_mock(mock_context):
+    with patch("shutil.which", return_value="/usr/bin/rg"):
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value.stdout = "file.txt:1:match"
+            mock_run.return_value.stderr = ""
+
+            result = run_grep_search(mock_context, "match", path=".")
+            assert "file.txt:1:match" in result
+            mock_run.assert_called_once()
+
+
+def test_handle_list_dir(mock_context):
+    with patch("meto.agent.tools.file_tools.list_directory") as mock_list:
+        mock_list.return_value = "list output"
+        params = {"path": ".", "recursive": True}
+        result = handle_list_dir(mock_context, params)
+        assert result == "list output"
+        mock_list.assert_called_once_with(mock_context, ".", True, False)
+
+
+def test_handle_read_file(mock_context):
+    with patch("meto.agent.tools.file_tools.read_file") as mock_read:
+        mock_read.return_value = "file content"
+        params = {"path": "test.txt"}
+        result = handle_read_file(mock_context, params)
+        assert result == "file content"
+        mock_read.assert_called_once_with(mock_context, "test.txt")
+
+
+def test_handle_write_file(mock_context):
+    with patch("meto.agent.tools.file_tools.write_file") as mock_write:
+        mock_write.return_value = "success"
+        params = {"path": "test.txt", "content": "data"}
+        result = handle_write_file(mock_context, params)
+        assert result == "success"
+        mock_write.assert_called_once_with(mock_context, "test.txt", "data")
+
+
+def test_handle_grep_search(mock_context):
+    with patch("meto.agent.tools.file_tools.run_grep_search") as mock_grep:
+        mock_grep.return_value = "grep results"
+        params = {"pattern": "findme", "path": "src"}
+        result = handle_grep_search(mock_context, params)
+        assert result == "grep results"
+        mock_grep.assert_called_once_with(mock_context, "findme", "src", False)
