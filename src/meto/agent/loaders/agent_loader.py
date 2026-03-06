@@ -29,6 +29,15 @@ class AgentConfig(TypedDict):
     prompt: str
 
 
+class AgentMetadata(TypedDict):
+    """Agent configuration with path tracking."""
+
+    description: str
+    tools: list[str] | str
+    prompt: str
+    path: Path
+
+
 def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]]:
     """Resolve an agent tool allowlist into concrete tool schemas.
 
@@ -122,7 +131,7 @@ def validate_agent_config(config: dict[str, Any]) -> list[str]:
     return errors
 
 
-class AgentLoader(BaseResourceLoader[AgentConfig]):
+class AgentLoader(BaseResourceLoader[AgentMetadata]):
     """Lazy-load agents: agents defined in .meto/agents/ and package defaults."""
 
     def __init__(self, agents_dirs: Path | list[Path]):
@@ -146,7 +155,7 @@ class AgentLoader(BaseResourceLoader[AgentConfig]):
                     agent_config = self.parse_agent_file(path)
                     if agent_config:
                         name = path.stem
-                        self._resources[name] = agent_config
+                        self._resources[name] = {**agent_config, "path": path}
                         logger.debug(f"Loaded agent '{name}' from {path}")
 
     def validate_agent_file(self, path: Path) -> tuple[AgentConfig | None, list[str]]:
@@ -204,11 +213,11 @@ class AgentLoader(BaseResourceLoader[AgentConfig]):
             return None
         return config
 
-    def get_agents(self) -> dict[str, AgentConfig]:
+    def get_agents(self) -> dict[str, AgentMetadata]:
         """Load agents.
 
         Returns:
-            Dict mapping agent names to AgentConfig
+            Dict mapping agent names to AgentMetadata
         """
         self._ensure_loaded()
         return self._resources
@@ -239,7 +248,7 @@ class AgentLoader(BaseResourceLoader[AgentConfig]):
             agent_name: Name of agent to get
 
         Returns:
-            AgentConfig for the agent
+            AgentConfig for the agent (excludes path)
 
         Raises:
             ValueError: If agent not found
@@ -250,7 +259,12 @@ class AgentLoader(BaseResourceLoader[AgentConfig]):
             raise ValueError(
                 f"Agent '{agent_name}' not found. Available agents: {available or '(none)'}"
             )
-        return agents[agent_name]
+        metadata = agents[agent_name]
+        return {
+            "description": metadata["description"],
+            "tools": metadata["tools"],
+            "prompt": metadata["prompt"],
+        }
 
 
 @lru_cache(maxsize=16)
@@ -280,14 +294,26 @@ def clear_agent_cache() -> None:
     _get_agent_loader.cache_clear()
 
 
-def get_agents(agents_dirs: tuple[Path, ...] | None = None) -> dict[str, AgentConfig]:
+def get_agent_loader(agents_dirs: tuple[Path, ...] | None = None) -> AgentLoader:
+    """Get or create the global agent loader instance.
+
+    Args:
+        agents_dirs: Directories to scan for agent files
+
+    Returns:
+        AgentLoader instance
+    """
+    return _get_agent_loader(agents_dirs)
+
+
+def get_agents(agents_dirs: tuple[Path, ...] | None = None) -> dict[str, AgentMetadata]:
     """Load agents.
 
     Args:
         agents_dirs: Directories to scan for agent files
 
     Returns:
-        Dict mapping agent names to AgentConfig
+        Dict mapping agent names to AgentMetadata
     """
     loader = _get_agent_loader(agents_dirs)
     return loader.get_agents()

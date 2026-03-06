@@ -14,6 +14,7 @@ from meto.agent.history_export import (
     get_context_summary,
     save_agent_context,
 )
+from meto.agent.loaders.agent_loader import get_agents
 from meto.agent.loaders.skill_loader import get_skill_loader
 from meto.conf import settings
 
@@ -171,6 +172,94 @@ def skills(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
         parts.append(f"{project_count} project-specific")
     summary = ", ".join(parts)
     console.print(f"[dim]{total} skill{'s' if total != 1 else ''} available ({summary})[/]")
+    console.print()
+
+
+@chat_commands.command()
+@click.pass_context
+def agents(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+    """List available agents.
+
+    Shows all agents from both built-in and project-specific directories.
+    """
+    console = Console()
+
+    # Get all agents metadata
+    all_agents = get_agents()
+
+    if not all_agents:
+        console.print("\n[yellow]No agents available.[/]")
+        console.print("[dim]Agents can be added to:[/]")
+        console.print("[dim]  - Project: .meto/agents/<agent-name>.md[/]")
+        console.print("[dim]  - Built-in: src/meto/resources/agents/<agent-name>.md[/]\n")
+        return
+
+    # Determine source for each agent (built-in vs project)
+    builtin_dir = (settings.DEFAULT_RESOURCES_DIR / "agents").resolve()
+    project_dir = settings.AGENTS_DIR.resolve()
+
+    table = Table(title="Available Agents", show_header=True, header_style="bold cyan")
+    table.add_column("Name", style="green")
+    table.add_column("Description", style="white")
+    table.add_column("Tools", style="yellow")
+    table.add_column("Source", style="dim")
+
+    builtin_count = 0
+    project_count = 0
+
+    for name in sorted(all_agents.keys()):
+        meta = all_agents[name]
+        agent_path = meta["path"].resolve()
+
+        # Determine source based on path
+        try:
+            agent_path.relative_to(builtin_dir)
+            source = "built-in"
+            icon = "📦"
+            builtin_count += 1
+        except ValueError:
+            try:
+                agent_path.relative_to(project_dir)
+                source = "project"
+                icon = "📂"
+                project_count += 1
+            except ValueError:
+                source = "other"
+                icon = "📄"
+                builtin_count += 1  # Count as built-in if from resources dir
+
+        # Truncate description if too long
+        desc = meta["description"]
+        if len(desc) > 50:
+            desc = desc[:47] + "..."
+
+        # Format tools display
+        tools = meta["tools"]
+        if tools == "*":
+            tools_str = "* (all)"
+        elif isinstance(tools, list):
+            tools_str = ", ".join(tools)
+            if len(tools_str) > 30:
+                tools_str = ", ".join(tools[:3]) + f" (+{len(tools) - 3})"
+        else:
+            tools_str = str(tools)
+
+        table.add_row(f"{icon} {name}", desc, tools_str, source)
+
+    console.print()
+    console.print(table)
+    console.print()
+
+    # Summary line
+    total = len(all_agents)
+    parts = []
+    if builtin_count > 0:
+        parts.append(f"{builtin_count} built-in")
+    if project_count > 0:
+        parts.append(f"{project_count} project-specific")
+    summary = ", ".join(parts)
+    console.print(f"[dim]{total} agent{'s' if total != 1 else ''} available ({summary})[/]")
+    console.print("[dim]Use @agent <name> to run tasks with a specific agent[/]")
     console.print()
 
 
