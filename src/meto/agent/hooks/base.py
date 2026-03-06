@@ -55,10 +55,12 @@ class PostToolUseHook(ABC):
     registry: ClassVar[list[type["PostToolUseHook"]]] = []
 
     tool_name: str
+    arguments: dict[str, Any]
     output: str
 
-    def __init__(self, tool_name: str, output: str) -> None:
+    def __init__(self, tool_name: str, arguments: dict[str, Any], output: str) -> None:
         self.tool_name = tool_name
+        self.arguments = arguments
         self.output = output
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

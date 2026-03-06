@@ -190,7 +190,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                     )
 
                     # Check post-execution hooks
-                    post_tool_hook_result = post_tool_use(fn_name, tool_output)
+                    post_tool_hook_result = post_tool_use(fn_name, arguments, tool_output)
                     if not post_tool_hook_result.success:
                         tool_output += (
                             f"\n\n[System] Post-action check failed: {post_tool_hook_result.error}"
