@@ -99,7 +99,10 @@ def run_shell(command: str) -> str:
                 cwd=os.getcwd(),
             )
     except subprocess.TimeoutExpired:
-        return f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)"
+        return (
+            f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s). "
+            "You can increase this limit by setting the METO_TOOL_TIMEOUT_SECONDS environment variable."
+        )
     except OSError as ex:
         return f"(shell execution error: {ex})"
 

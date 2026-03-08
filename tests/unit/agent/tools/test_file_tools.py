@@ -116,6 +116,16 @@ def test_run_grep_search_mock(mock_context):
             mock_run.assert_called_once()
 
 
+def test_run_grep_search_timeout(mock_context):
+    from meto.conf import settings
+    import subprocess
+    with patch("shutil.which", return_value="/usr/bin/rg"):
+        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="rg", timeout=settings.TOOL_TIMEOUT_SECONDS)):
+            result = run_grep_search(mock_context, "match", path=".")
+            assert f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)" in result
+            assert "METO_TOOL_TIMEOUT_SECONDS" in result
+
+
 def test_handle_list_dir(mock_context):
     with patch("meto.agent.tools.file_tools.list_directory") as mock_list:
         mock_list.return_value = "list output"
