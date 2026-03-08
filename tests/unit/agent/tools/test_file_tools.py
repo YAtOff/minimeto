@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -183,3 +184,46 @@ def test_handle_grep_search(mock_context):
         result = handle_grep_search(mock_context, params)
         assert result == "grep results"
         mock_grep.assert_called_once_with(mock_context, "findme", "src", False)
+
+
+def test_replace_text_in_file_unicode_error(tmp_path, mock_context):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("dummy")
+    with patch.object(
+        Path, "read_text", side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "invalid")
+    ):
+        result = replace_text_in_file(mock_context, str(test_file), "old", "new")
+        assert "Error: Cannot decode file" in result
+
+
+def test_replace_text_in_file_permission_error(tmp_path, mock_context):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("dummy")
+    with patch.object(Path, "read_text", side_effect=PermissionError("Permission denied")):
+        result = replace_text_in_file(mock_context, str(test_file), "old", "new")
+        assert "Error: Permission denied accessing" in result
+
+
+def test_replace_text_in_file_is_a_directory_error(tmp_path, mock_context):
+    test_file = tmp_path / "test_dir"
+    test_file.mkdir()
+    # Path.read_text on a directory raises IsADirectoryError (on some systems or if mocked)
+    with patch.object(Path, "read_text", side_effect=IsADirectoryError("Is a directory")):
+        result = replace_text_in_file(mock_context, str(test_file), "old", "new")
+        assert "Error: Path is a directory" in result
+
+
+def test_replace_text_in_file_unexpected_error_bubbles_up(tmp_path, mock_context):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("dummy")
+    with patch.object(Path, "read_text", side_effect=NameError("bug")):
+        with pytest.raises(NameError):
+            replace_text_in_file(mock_context, str(test_file), "old", "new")
+
+
+def test_insert_in_file_unexpected_error_bubbles_up(tmp_path, mock_context):
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("dummy")
+    with patch.object(Path, "read_text", side_effect=NameError("bug")):
+        with pytest.raises(NameError):
+            insert_in_file(mock_context, str(test_file), 1, "new")

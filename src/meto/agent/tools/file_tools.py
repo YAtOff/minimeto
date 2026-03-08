@@ -164,8 +164,14 @@ def replace_text_in_file(_context: Context, path: str, old_str: str, new_str: st
         new_content = content.replace(old_str, new_str)
         file_path.write_text(new_content, encoding="utf-8")
         return f"Successfully replaced '{old_str}' with '{new_str}' in {path}"
-    except Exception as ex:
-        return f"Error replacing text in {path}: {ex}"
+    except UnicodeDecodeError:
+        return f"Error: Cannot decode file {path} as UTF-8 text"
+    except PermissionError:
+        return f"Error: Permission denied accessing {path}"
+    except IsADirectoryError:
+        return f"Error: Path is a directory, not a file: {path}"
+    except OSError as ex:
+        return f"Error modifying file {path}: {ex}"
 
 
 def insert_in_file(_context: Context, path: str, insert_line: int, new_str: str) -> str:
@@ -193,8 +199,14 @@ def insert_in_file(_context: Context, path: str, insert_line: int, new_str: str)
 
         file_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return f"Successfully inserted text at line {insert_line} in {path}"
-    except Exception as ex:
-        return f"Error inserting text in {path}: {ex}"
+    except UnicodeDecodeError:
+        return f"Error: Cannot decode file {path} as UTF-8 text"
+    except PermissionError:
+        return f"Error: Permission denied accessing {path}"
+    except IsADirectoryError:
+        return f"Error: Path is a directory, not a file: {path}"
+    except OSError as ex:
+        return f"Error modifying file {path}: {ex}"
 
 
 def write_file(_context: Context, path: str, content: str) -> str:
