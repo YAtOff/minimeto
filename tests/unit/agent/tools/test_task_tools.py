@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from meto.agent.context import Context
+from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.tools.task_tools import (
     execute_task,
     handle_manage_todos,
@@ -38,6 +39,34 @@ def test_execute_task_success(mock_context):
             assert "output line 1" in result
             assert "output line 2" in result
             mock_subagent.assert_called_once_with("worker", skill_name="some_skill")
+
+
+def test_execute_task_interrupted(mock_context):
+    with patch("meto.agent.agent.Agent.subagent"):
+        with patch("meto.agent.agent_loop.run_agent_loop") as mock_run_loop:
+            mock_run_loop.side_effect = AgentInterrupted()
+
+            result = execute_task(mock_context, "do something", "worker")
+            assert result == "(subagent cancelled by user)"
+
+
+def test_execute_task_max_steps(mock_context):
+    with patch("meto.agent.agent.Agent.subagent"):
+        with patch("meto.agent.agent_loop.run_agent_loop") as mock_run_loop:
+            mock_run_loop.side_effect = MaxStepsExceededError("Too many steps")
+
+            result = execute_task(mock_context, "do something", "worker")
+            assert "subagent exceeded maximum turns" in result
+            assert "Too many steps" in result
+
+
+def test_execute_task_generic_error(mock_context):
+    with patch("meto.agent.agent.Agent.subagent"):
+        with patch("meto.agent.agent_loop.run_agent_loop") as mock_run_loop:
+            mock_run_loop.side_effect = ValueError("Some error")
+
+            result = execute_task(mock_context, "do something", "worker")
+            assert "subagent error: ValueError: Some error" in result
 
 
 def test_handle_manage_todos(mock_context):

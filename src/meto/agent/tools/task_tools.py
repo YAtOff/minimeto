@@ -1,5 +1,6 @@
 """Task and todo management."""
 
+import logging
 from typing import Any, cast
 
 from rich.console import Console
@@ -7,8 +8,11 @@ from rich.panel import Panel
 
 from meto.agent.agent import Agent
 from meto.agent.context import Context
+from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.shell import truncate
 from meto.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def manage_todos(context: Context, items: list[dict[str, Any]]) -> str:
@@ -76,8 +80,13 @@ def execute_task(
         agent = Agent.subagent(agent_name, skill_name=context.active_skill)
         output = "\n".join(run_agent_loop(agent, prompt, context.fork()))
         result = truncate(output or "(subagent returned no output)", settings.MAX_TOOL_OUTPUT_CHARS)
+    except AgentInterrupted:
+        result = "(subagent cancelled by user)"
+    except MaxStepsExceededError as ex:
+        result = f"(subagent exceeded maximum turns: {ex})"
     except Exception as ex:
-        result = f"(subagent error: {ex})"
+        logger.error(f"Subagent '{agent_name}' failed", exc_info=True)
+        result = f"(subagent error: {type(ex).__name__}: {ex})"
 
     # Show end banner
     console.print(
