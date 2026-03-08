@@ -94,6 +94,8 @@ def _format_as_markdown(history: Sequence[dict[str, Any]]) -> str:
                     lines.append(f"- **{fn_name}**")
                     if isinstance(fn_args, dict) and fn_args:
                         lines.append(f"  ```json\n  {json.dumps(fn_args, indent=2)}\n  ```")
+                    elif isinstance(fn_args, str) and fn_args and fn_args != "{}":
+                        lines.append(f"  ```\n  {fn_args}\n  ```")
                     lines.append("")
 
         elif role == "TOOL":
@@ -149,6 +151,8 @@ def _format_as_text(history: Sequence[dict[str, Any]]) -> str:
                         args_dict = cast(dict[str, Any], fn_args)
                         for key, value in args_dict.items():
                             lines.append(f"      {key}: {value}")
+                    elif isinstance(fn_args, str) and fn_args and fn_args != "{}":
+                        lines.append(f"      Args: {fn_args}")
 
         elif role == "TOOL":
             tool_call_id = msg.get("tool_call_id", "unknown")
