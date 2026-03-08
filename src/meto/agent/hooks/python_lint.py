@@ -1,7 +1,10 @@
+import logging
 import subprocess
 from typing import ClassVar, override
 
 from meto.agent.hooks.base import HookResult, PostToolUseHook, SuccessResult
+
+logger = logging.getLogger(__name__)
 
 
 class PythonLintHook(PostToolUseHook):
@@ -49,8 +52,7 @@ class PythonLintHook(PostToolUseHook):
                 capture_output=True,
                 text=True,
             )
-        except Exception:
-            # Silently ignore errors in the hook itself to not disrupt the agent loop
-            pass
+        except Exception as e:
+            logger.warning(f"Python lint hook failed for {path}: {e}")
 
         return SuccessResult()
