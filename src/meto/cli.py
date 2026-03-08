@@ -13,7 +13,7 @@ from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
 from meto.agent.command import NewSessionException, execute_chat_command
 from meto.agent.context import Context
-from meto.agent.exceptions import AgentInterrupted
+from meto.agent.exceptions import AgentInterrupted, MCPInitializationError
 from meto.agent.mcp_client import initialize_mcp_registry
 from meto.agent.session import Session
 from meto.agent.syntax_expander import SyntaxExpander
@@ -45,9 +45,10 @@ def _run_single_prompt(
 
     # Normal prompt flow
     if "mcp" in settings.AGENT_FEATURES:
-        warning = initialize_mcp_registry(registry)
-        if warning:
-            print(f"[mcp] {warning}", flush=True)
+        try:
+            initialize_mcp_registry(registry)
+        except MCPInitializationError as e:
+            print(f"[mcp] {e}", file=sys.stderr, flush=True)
 
     # Try syntax expansions (@agent, ~skill, etc.)
     expander = SyntaxExpander(settings.AGENT_FEATURES)

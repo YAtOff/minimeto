@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
+from meto.agent.exceptions import MCPInitializationError
 from meto.agent.mcp_client import initialize_mcp_registry
 from meto.agent.tool_registry import ToolRegistry
 
@@ -20,9 +21,9 @@ def test_initialize_mcp_registry_invalid_config(registry, tmp_path, caplog):
         # We need to reset the global _is_initialized for testing
         with patch("meto.agent.mcp_client._is_initialized", False):
             with caplog.at_level("ERROR"):
-                warning = initialize_mcp_registry(registry)
-                assert warning is not None
-                assert "MCP initialization failed" in warning
+                with pytest.raises(MCPInitializationError) as excinfo:
+                    initialize_mcp_registry(registry)
+                assert "MCP initialization failed" in str(excinfo.value)
                 assert any(
                     "MCP initialization failed" in record.message for record in caplog.records
                 )
@@ -37,10 +38,10 @@ def test_initialize_mcp_registry_server_failure(registry, tmp_path, caplog):
         with patch("meto.agent.mcp_client._is_initialized", False):
             with caplog.at_level("ERROR"):
                 # _discover_server will fail because "nonexistent" command won't work
-                warning = initialize_mcp_registry(registry)
-                assert warning is not None
-                assert "MCP tool discovery warnings" in warning
-                assert "fail-server" in warning
+                with pytest.raises(MCPInitializationError) as excinfo:
+                    initialize_mcp_registry(registry)
+                assert "MCP tool discovery failed" in str(excinfo.value)
+                assert "fail-server" in str(excinfo.value)
                 assert any(
                     "Failed to discover MCP tools for fail-server" in record.message
                     for record in caplog.records

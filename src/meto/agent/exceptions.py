@@ -35,3 +35,7 @@ class SkillAgentNotFoundError(AgentError):
 
 class SkillAgentValidationError(AgentError):
     """Raised when a skill-local agent fails validation."""
+
+
+class MCPInitializationError(AgentError):
+    """Raised when MCP tools cannot be initialized or discovered."""

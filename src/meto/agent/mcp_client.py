@@ -11,6 +11,7 @@ from typing import Any
 
 from fastmcp import Client
 
+from meto.agent.exceptions import MCPInitializationError
 from meto.agent.tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -134,24 +135,24 @@ def _discover_server(
         tools = asyncio.run(_run())
         return tools, None
     except Exception as exc:
-        logger.error(f"Failed to discover MCP tools for {server_name}: {exc}")
-        return [], f"{server_name}: {exc}"
+        logger.error(f"Failed to discover MCP tools for {server_name}: {exc}", exc_info=True)
+        return [], f"{server_name}: {type(exc).__name__}: {exc}"
 
 
-def initialize_mcp_registry(registry: ToolRegistry) -> str | None:
+def initialize_mcp_registry(registry: ToolRegistry) -> None:
     """Initialize MCP tools from ``{CWD}/mcp.json`` into the runtime registry.
 
-    Iterates each server independently so a single failing server does not
-    prevent tools from other servers being registered.
+    Args:
+        registry: The tool registry to register tools into.
 
-    Returns:
-            Optional warning/error message. ``None`` means success or no config file.
+    Raises:
+        MCPInitializationError: If configuration is invalid or discovery fails.
     """
 
     global _is_initialized
 
     if _is_initialized:
-        return None
+        return
 
     config_file = _config_path()
     try:
@@ -159,11 +160,11 @@ def initialize_mcp_registry(registry: ToolRegistry) -> str | None:
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         _is_initialized = True
         error_msg = f"MCP initialization failed: {exc}"
-        logger.error(error_msg)
-        return error_msg
+        logger.error(error_msg, exc_info=True)
+        raise MCPInitializationError(error_msg) from exc
 
     if config is None:
-        return None
+        return
 
     mcp_servers: dict[str, Any] = config.get("mcpServers") or {}
     errors: list[str] = []
@@ -187,8 +188,6 @@ def initialize_mcp_registry(registry: ToolRegistry) -> str | None:
 
     _is_initialized = True
     if errors:
-        msg = "MCP tool discovery warnings:\n" + "\n".join(f"  - {e}" for e in errors)
-        logger.warning(msg)
-        return msg
-
-    return None
+        msg = "MCP tool discovery failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        logger.error(msg)
+        raise MCPInitializationError(msg)
