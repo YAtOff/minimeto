@@ -1,6 +1,7 @@
 import json
 import logging
 import shlex
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import click
@@ -278,7 +279,7 @@ def _summarize_tool_args(args: str, max_len: int = 60) -> str:
 
 
 def _format_history_for_summary(
-    history: list[dict[str, Any]],
+    history: Sequence[dict[str, Any]],
     max_chars: int = 15000,
 ) -> str:
     """Format history as readable text for LLM summarization."""
@@ -315,7 +316,7 @@ def _format_history_for_summary(
     return "\n".join(lines)
 
 
-def _generate_llm_summary(history: list[dict[str, Any]]) -> str | None:
+def _generate_llm_summary(history: Sequence[dict[str, Any]]) -> str | None:
     """Generate an LLM-based semantic summary of the conversation."""
     from openai import OpenAI
 
@@ -362,7 +363,7 @@ Conversation:
         return None
 
 
-def _generate_compact_summary(history: list[dict[str, Any]], stats: dict[str, Any]) -> str:
+def _generate_compact_summary(history: Sequence[dict[str, Any]], stats: dict[str, Any]) -> str:
     """Generate a compact summary string for logging.
 
     Attempts LLM-based summary first, falls back to rule-based on failure.

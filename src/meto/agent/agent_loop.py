@@ -61,7 +61,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
     try:
         reasoning_logger.log_system_prompt(build_system_prompt(agent.prompt))
         reasoning_logger.log_user_input(prompt)
-        context.history.append({"role": "user", "content": prompt})
+        context.add_message({"role": "user", "content": prompt})
 
         # Reset rule injection tracking for this new prompt
         RuleInjectionHook.reset_injected_rules()
@@ -114,7 +114,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                 if resp.usage:
                     assistant_message["prompt_tokens"] = resp.usage.prompt_tokens
                     assistant_message["completion_tokens"] = resp.usage.completion_tokens
-                context.history.append(assistant_message)
+                context.add_message(assistant_message)
 
                 if assistant_content:
                     yield assistant_content
@@ -131,7 +131,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                     fn = tc_any.function
                     fn_name = getattr(fn, "name", None)
                     if not isinstance(fn_name, str) or not agent.has_tool(fn_name):
-                        context.history.append(
+                        context.add_message(
                             {
                                 "role": "tool",
                                 "tool_call_id": tc_any.id,
@@ -145,7 +145,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         arguments_any = json.loads(arguments_raw)
                     except (TypeError, json.JSONDecodeError) as e:
                         logger.error(f"Failed to parse arguments for {fn_name}: {e}")
-                        context.history.append(
+                        context.add_message(
                             {
                                 "role": "tool",
                                 "tool_call_id": tc_any.id,
@@ -158,7 +158,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         logger.error(
                             f"Tool arguments for {fn_name} must be a dictionary, got {type(arguments_any).__name__}"
                         )
-                        context.history.append(
+                        context.add_message(
                             {
                                 "role": "tool",
                                 "tool_call_id": tc_any.id,
@@ -172,7 +172,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                     # Check pre-execution hooks
                     pre_tool_hook_result = pre_tool_use(fn_name, arguments)
                     if not pre_tool_hook_result.success:
-                        context.history.append(
+                        context.add_message(
                             {
                                 "role": "tool",
                                 "tool_call_id": tc_any.id,
@@ -188,7 +188,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                             pre_tool_hook_result.injected_content,
                             fn_name,
                         )
-                        context.history.append(
+                        context.add_message(
                             {
                                 "role": "system",
                                 "content": pre_tool_hook_result.injected_content,
@@ -212,7 +212,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                             f"\n\n[System] Post-action check failed: {post_tool_hook_result.error}"
                         )
 
-                    context.history.append(
+                    context.add_message(
                         {
                             "role": "tool",
                             "tool_call_id": tc_any.id,

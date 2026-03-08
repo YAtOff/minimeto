@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -20,10 +20,31 @@ class Context:
     """Context object passed to tools that need it."""
 
     todos: TodoManager
-    history: list[dict[str, str | dict[str, Any]]]
+    _history: list[dict[str, Any]] = field(default_factory=list)
     pending_tools: list[PendingTool] = field(default_factory=list)
     active_skill: str | None = None  # Track currently loaded skill for skill-local agents
     # Add more fields as needed for tools (e.g. session state, config, etc.)
+
+    def __init__(
+        self,
+        todos: TodoManager,
+        history: list[dict[str, Any]] | None = None,
+        pending_tools: list[PendingTool] | None = None,
+        active_skill: str | None = None,
+    ) -> None:
+        self.todos = todos
+        self._history = history if history is not None else []
+        self.pending_tools = pending_tools if pending_tools is not None else []
+        self.active_skill = active_skill
+
+    @property
+    def history(self) -> Sequence[dict[str, Any]]:
+        """Return an immutable view of the conversation history."""
+        return tuple(self._history)
+
+    def add_message(self, message: dict[str, Any]) -> None:
+        """Add a message to the conversation history."""
+        self._history.append(message)
 
     def fork(self) -> "Context":
         """Create a forked context for subagents, preserving necessary state."""

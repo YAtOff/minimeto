@@ -5,6 +5,7 @@ Provides methods to extract, format, and save conversation history.
 
 import hashlib
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
@@ -15,7 +16,7 @@ from meto.conf import settings
 
 
 def dump_agent_context(
-    history: list[dict[str, Any]],
+    history: Sequence[dict[str, Any]],
     output_format: str = "json",
     *,
     include_system: bool = True,
@@ -59,7 +60,7 @@ def dump_agent_context(
         raise ValueError(f"Unknown format: {output_format}")
 
 
-def _format_as_markdown(history: list[dict[str, Any]]) -> str:
+def _format_as_markdown(history: Sequence[dict[str, Any]]) -> str:
     """Format history as readable Markdown."""
     lines = ["# Agent Conversation History\n"]
 
@@ -108,7 +109,7 @@ def _format_as_markdown(history: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _format_as_text(history: list[dict[str, Any]]) -> str:
+def _format_as_text(history: Sequence[dict[str, Any]]) -> str:
     """Format history as simple readable text."""
     lines = ["=" * 80]
     lines.append("AGENT CONVERSATION HISTORY")
@@ -162,7 +163,7 @@ def _format_as_text(history: list[dict[str, Any]]) -> str:
 
 
 def save_agent_context(
-    history: list[dict[str, Any]],
+    history: Sequence[dict[str, Any]],
     filepath: str | Path,
     output_format: str = "json",
     *,
@@ -195,7 +196,7 @@ def save_agent_context(
     print(f"✓ Agent context saved to {filepath}")
 
 
-def get_context_summary(history: list[dict[str, Any]]) -> dict[str, Any]:
+def get_context_summary(history: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """
     Get a summary of the agent context.
 
@@ -299,7 +300,7 @@ def _get_agents_md_metadata() -> dict[str, Any]:
     }
 
 
-def _estimate_tokens(history: list[dict[str, Any]]) -> int:
+def _estimate_tokens(history: Sequence[dict[str, Any]]) -> int:
     """Rough estimate of token count (4 chars ≈ 1 token)."""
     total_chars = sum(len(str(m.get("content", ""))) for m in history)
     return max(1, total_chars // 4)
@@ -315,7 +316,7 @@ def _format_size(bytes_val: int) -> str:
     return f"{size:.1f} TB"
 
 
-def format_context_summary(history: list[dict[str, Any]]) -> None:
+def format_context_summary(history: Sequence[dict[str, Any]]) -> None:
     """Format and print a human-readable, multi-line context summary.
 
     Intended for interactive surfaces (e.g., the REPL `/context` command).
