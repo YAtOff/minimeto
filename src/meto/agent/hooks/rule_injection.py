@@ -13,7 +13,7 @@ from typing import override
 from meto.agent.loaders.rule_loader import get_rule_loader
 from meto.conf import settings
 
-from .base import HookResult, InjectedResult, PreToolUseHook, SuccessResult
+from .base import ErrorResult, HookResult, InjectedResult, PreToolUseHook, SuccessResult
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,7 @@ Please ensure your {self.tool_name} operation follows these guidelines.
             return InjectedResult(injected_content=injected_message)
 
         except Exception as e:
-            # Log but don't block - rules are advisory
-            logger.warning(f"Failed to load rules for {filename}: {e}")
-            return SuccessResult()
+            # Rule loading failed - this is a high severity issue that shouldn't be silent
+            error_msg = f"Failed to load rules for {filename}: {e}"
+            logger.error(error_msg)
+            return ErrorResult(error=error_msg)
