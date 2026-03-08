@@ -163,6 +163,7 @@ class Session:
         last_compact_index = -1
 
         # First pass: read all lines and find last compact marker
+        skipped_count = 0
         try:
             lines: list[tuple[int, dict[str, Any]]] = []
             with open(session_file, encoding="utf-8") as f:
@@ -175,6 +176,7 @@ class Session:
                                 last_compact_index = i
                         except json.JSONDecodeError:
                             logger.warning(f"Skipping malformed line {i} in session {session_id}")
+                            skipped_count += 1
                             continue
 
             # Second pass: extract messages (skip header + pre-compact messages)
@@ -205,6 +207,12 @@ class Session:
                 logger.info(
                     f"Session {session_id}: compact marker at line {last_compact_index}, "
                     f"loading {len(messages)} messages after compact"
+                )
+
+            if skipped_count > 0:
+                logger.warning(
+                    f"Session {session_id}: skipped {skipped_count} malformed lines. "
+                    "History may be incomplete."
                 )
 
         except OSError as e:
