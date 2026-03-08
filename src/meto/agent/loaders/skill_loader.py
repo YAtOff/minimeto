@@ -6,6 +6,7 @@ Each skill is a directory containing SKILL.md with YAML frontmatter + markdown b
 
 from __future__ import annotations
 
+import json
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -190,7 +191,7 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
             self._content_cache[skill_name] = full_content
             return full_content
 
-        except Exception as e:
+        except (OSError, ValueError, json.JSONDecodeError) as e:
             raise ValueError(f"Failed to load skill '{skill_name}': {e}") from e
 
     def list_skills(self) -> list[str]:
