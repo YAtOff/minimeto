@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from meto.agent.loaders.frontmatter import parse_yaml_frontmatter
 
 logger = logging.getLogger(__name__)
@@ -69,9 +71,12 @@ class BaseResourceLoader[T]:
             content = path.read_text(encoding="utf-8")
             parsed = parse_yaml_frontmatter(content)
             return parsed["metadata"], parsed["body"]
-        except Exception as e:
-            logger.warning(f"Failed to parse resource file {path}: {e}")
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
+            logger.error(f"Failed to parse resource file {path}: {e}")
             return None
+        except Exception as e:
+            logger.error(f"Unexpected error parsing {path}: {e}", exc_info=True)
+            raise
 
     def validate_directories(self) -> list[Path]:
         """Check which directories exist and are directories.
