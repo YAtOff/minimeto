@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,8 @@ from typing import Any
 from fastmcp import Client
 
 from meto.agent.tool_registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 _is_initialized = False
 
@@ -20,6 +23,19 @@ def _config_path() -> Path:
 
 
 def _load_config(path: Path) -> dict[str, Any] | None:
+    """Load and validate the MCP configuration from mcp.json.
+
+    Args:
+        path: Path to the mcp.json file.
+
+    Returns:
+        The loaded configuration or None if the file does not exist.
+
+    Raises:
+        OSError: If there's an error reading the file.
+        json.JSONDecodeError: If the file is not valid JSON.
+        ValueError: If the configuration is not a dictionary.
+    """
     if not path.exists():
         return None
 
@@ -94,6 +110,7 @@ def _discover_server(
         tools = asyncio.run(_run())
         return tools, None
     except Exception as exc:
+        logger.error(f"Failed to discover MCP tools for {server_name}: {exc}")
         return [], f"{server_name}: {exc}"
 
 
@@ -117,7 +134,9 @@ def initialize_mcp_registry(registry: ToolRegistry) -> str | None:
         config = _load_config(config_file)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         _is_initialized = True
-        return f"MCP initialization failed: {exc}"
+        error_msg = f"MCP initialization failed: {exc}"
+        logger.error(error_msg)
+        return error_msg
 
     if config is None:
         return None
@@ -143,6 +162,9 @@ def initialize_mcp_registry(registry: ToolRegistry) -> str | None:
         )
 
     _is_initialized = True
-    return (
-        "MCP tool discovery warnings:\n" + "\n".join(f"  - {e}" for e in errors) if errors else None
-    )
+    if errors:
+        msg = "MCP tool discovery warnings:\n" + "\n".join(f"  - {e}" for e in errors)
+        logger.warning(msg)
+        return msg
+
+    return None
