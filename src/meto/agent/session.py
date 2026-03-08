@@ -141,6 +141,9 @@ class Session:
         If a compact marker exists in the session file, only messages after
         the last compact marker are loaded. The full history is preserved on disk.
         """
+        from meto.agent.permissions import PermissionManager
+
+        PermissionManager.reset()
 
         session_file = session_dir / f"session-{session_id}.jsonl"
 
@@ -209,6 +212,10 @@ class Session:
     @classmethod
     def new(cls) -> Session:
         """Create new session with unique ID."""
+        from meto.agent.permissions import PermissionManager
+
+        PermissionManager.reset()
+
         session_id = generate_session_id()
         working_dir = Path.cwd()
         session_logger = SessionLogger(session_id)
