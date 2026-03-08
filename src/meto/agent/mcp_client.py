@@ -59,6 +59,14 @@ def _load_config(path: Path) -> dict[str, Any] | None:
 
 
 def _render_tool_result(result: Any) -> str:
+    """Extract and format the tool call result into a string.
+
+    Args:
+        result: The raw result object from the MCP client.
+
+    Returns:
+        A human-readable string representation of the result.
+    """
     if bool(getattr(result, "is_error", False)):
         lines: list[str] = []
         for block in getattr(result, "content", []):
@@ -85,6 +93,17 @@ def _render_tool_result(result: Any) -> str:
 
 
 def _call_tool_sync(config: dict[str, Any], tool_name: str, arguments: dict[str, Any]) -> str:
+    """Call an MCP tool synchronously.
+
+    Args:
+        config: The single-server MCP configuration.
+        tool_name: The name of the tool to call.
+        arguments: The arguments to pass to the tool.
+
+    Returns:
+        The formatted result string.
+    """
+
     async def _run() -> str:
         async with Client(config) as client:
             result = await client.call_tool(tool_name, arguments, raise_on_error=False)
@@ -98,7 +117,12 @@ def _discover_server(
 ) -> tuple[list[Any], str | None]:
     """Discover tools from a single MCP server config entry.
 
-    Returns a tuple of (tools, error_message). On success error_message is None.
+    Args:
+        server_name: Friendly name of the server.
+        server_config: The server configuration (command, args, env).
+
+    Returns:
+        A tuple of (tools, error_message). On success error_message is None.
     """
     single_server_config = {"mcpServers": {server_name: server_config}}
 

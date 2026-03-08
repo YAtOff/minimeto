@@ -12,7 +12,15 @@ from meto.conf import settings
 
 
 def manage_todos(context: Context, items: list[dict[str, Any]]) -> str:
-    """Update the todo list for a session."""
+    """Update the todo list for a session.
+
+    Args:
+        context: Execution context (used to access TodoManager)
+        items: List of todo items to update/add
+
+    Returns:
+        Summary of changes to the todo list
+    """
 
     try:
         result = context.todos.update(items)
@@ -28,7 +36,17 @@ def execute_task(
     agent_name: str,
     description: str | None = None,
 ) -> str:
-    """Execute task in isolated subagent via direct `run_agent_loop` call."""
+    """Execute task in isolated subagent via direct `run_agent_loop` call.
+
+    Args:
+        context: Execution context (forked for the subagent)
+        prompt: Task description/instruction for the subagent
+        agent_name: Name of the agent configuration to use
+        description: User-facing description of the subagent's task
+
+    Returns:
+        Final output from the subagent execution
+    """
 
     from meto.agent.agent_loop import run_agent_loop  # pyright: ignore[reportImportCycles]
 

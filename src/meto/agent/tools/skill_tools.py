@@ -9,7 +9,15 @@ from meto.agent.loaders import get_skill_loader
 
 
 def load_skill(context: Context, skill_name: str) -> str:
-    """Load skill content and return it."""
+    """Load skill content and return it.
+
+    Args:
+        context: Execution context (used to track active skill)
+        skill_name: Name of the skill to load
+
+    Returns:
+        The full content of the skill (markdown body) or an error message
+    """
     try:
         skill_loader = get_skill_loader()
 
@@ -40,7 +48,15 @@ def load_skill(context: Context, skill_name: str) -> str:
 
 
 def load_agent(context: Context, agent_name: str) -> str:
-    """Load a skill-local agent configuration."""
+    """Load a skill-local agent configuration.
+
+    Args:
+        context: Execution context (used to find active skill)
+        agent_name: Name of the agent to load from the active skill
+
+    Returns:
+        JSON-formatted agent configuration or an error message
+    """
     # Check if a skill is currently active
     if not context.active_skill:
         return "Error: No skill is currently active. Use load_skill first to load a skill, then use load_agent to access its agents."

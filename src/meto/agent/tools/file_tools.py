@@ -81,7 +81,17 @@ def read_file(
     start_line: int | None = None,
     end_line: int | None = None,
 ) -> str:
-    """Read file contents with proper error handling and optional line range."""
+    """Read file contents with proper error handling and optional line range.
+
+    Args:
+        _context: Execution context (unused)
+        path: Path to the file to read
+        start_line: 1-based line number to start reading from (inclusive)
+        end_line: 1-based line number to end reading at (inclusive)
+
+    Returns:
+        The file content or an error message string
+    """
 
     try:
         file_path = Path(path).expanduser().resolve()
@@ -94,7 +104,7 @@ def read_file(
         total_lines = len(lines)
 
         if start_line is not None or end_line is not None:
-            # 1-based indexing for users
+            # 1-based indexing for users (inclusive start/end)
             start = (start_line - 1) if start_line is not None else 0
             end = end_line if end_line is not None else total_lines
 
@@ -124,7 +134,17 @@ def read_file(
 
 
 def replace_text_in_file(_context: Context, path: str, old_str: str, new_str: str) -> str:
-    """Replace exactly one occurrence of old_str with new_str in a file."""
+    """Replace exactly one occurrence of old_str with new_str in a file.
+
+    Args:
+        _context: Execution context (unused)
+        path: Path to the file to modify
+        old_str: The literal text to find and replace
+        new_str: The text to replace old_str with
+
+    Returns:
+        Success message or an error message string
+    """
     try:
         file_path = Path(path).expanduser().resolve()
         if not file_path.exists():
@@ -149,7 +169,17 @@ def replace_text_in_file(_context: Context, path: str, old_str: str, new_str: st
 
 
 def insert_in_file(_context: Context, path: str, insert_line: int, new_str: str) -> str:
-    """Insert text at a specific line in a file."""
+    """Insert text at a specific line in a file.
+
+    Args:
+        _context: Execution context (unused)
+        path: Path to the file to modify
+        insert_line: 1-based line number where the new text will be inserted
+        new_str: The text to insert
+
+    Returns:
+        Success message or an error message string
+    """
     try:
         file_path = Path(path).expanduser().resolve()
         if not file_path.exists():
@@ -168,7 +198,16 @@ def insert_in_file(_context: Context, path: str, insert_line: int, new_str: str)
 
 
 def write_file(_context: Context, path: str, content: str) -> str:
-    """Write content to a file with proper error handling."""
+    """Write content to a file with proper error handling.
+
+    Args:
+        _context: Execution context (unused)
+        path: Path to the file to write
+        content: Complete content to write to the file
+
+    Returns:
+        Success message or an error message string
+    """
 
     try:
         file_path = Path(path).expanduser().resolve()

@@ -10,7 +10,16 @@ from meto.agent.shell import truncate
 
 
 def fetch(_context: Context, url: str, max_bytes: int = 100000) -> str:
-    """Fetch URL via HTTP GET, return response body as text (truncated)."""
+    """Fetch URL via HTTP GET, return response body as text (truncated).
+
+    Args:
+        _context: Execution context (unused)
+        url: The full URL to fetch (http/https only)
+        max_bytes: Maximum size of the response to return in bytes
+
+    Returns:
+        The (potentially truncated) response body or an error message
+    """
 
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:

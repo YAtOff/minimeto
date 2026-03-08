@@ -10,7 +10,15 @@ from meto.agent.context import Context
 
 
 def ask_user_question(_context: Context, question: str) -> str:
-    """Ask user a question using prompt_toolkit and return response."""
+    """Ask user a question using prompt_toolkit and return response.
+
+    Args:
+        _context: Execution context (unused)
+        question: The question to present to the user
+
+    Returns:
+        The user's response string or an error message
+    """
 
     console = Console()
     session = PromptSession(editing_mode=EditingMode.EMACS)

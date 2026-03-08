@@ -59,7 +59,17 @@ class Context:
         self._history.append(message)
 
     def fork(self) -> "Context":
-        """Create a forked context for subagents, preserving necessary state."""
+        """Create a forked context for subagents, preserving necessary state.
+
+        Design Rationale:
+        - History: Fresh for subagents to provide isolation and prevent context bloat.
+        - Todos: Shared to maintain a single source of truth for task progress.
+        - Active Skill: Preserved to allow skill-local subagents to function.
+        - Pending Tools: Not preserved to ensure tool registration is explicit.
+
+        Returns:
+            A new Context instance with shared state where appropriate.
+        """
         return Context(
             todos=self.todos,  # Share the same todo manager for centralized task tracking
             history=[],  # Start with fresh history for subagent

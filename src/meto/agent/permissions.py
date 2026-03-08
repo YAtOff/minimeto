@@ -16,7 +16,10 @@ class PermissionManager:
     """Manages user permissions for sensitive operations during a session.
 
     Permissions are stored at the class level to share state across all hook
-    instances within a single session. The cache resets when the process exits.
+    instances within a single session. This prevents redundant prompting (e.g.
+    asking for shell permission multiple times in a single REPL session).
+
+    The cache resets when the process exits.
     """
 
     # Class-level permission cache: {permission_key: granted}

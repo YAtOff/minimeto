@@ -162,6 +162,8 @@ def build_system_prompt(agent_prompt: "str" = "") -> str:
     Args:
         agent_prompt: Optional agent-specific prompt
 
-    Note: This intentionally does not cache; it re-reads AGENTS.md each call.
+    Note: This re-reads AGENTS.md from disk on each call to allow live updates
+    to project instructions. Other resources (subagents, skills) are cached
+    within their respective loaders for performance.
     """
     return SystemPromptBuilder(settings.AGENT_FEATURES).build(agent_prompt)
