@@ -103,7 +103,7 @@ class ReasoningLogger:
         """Support context manager protocol."""
         return self
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+    def __exit__(self, *args: Any) -> None:
         """Support context manager protocol with automatic cleanup."""
         self.close()
 
