@@ -1,7 +1,7 @@
 import subprocess
 from typing import ClassVar, override
 
-from meto.agent.hooks.base import HookResult, PostToolUseHook
+from meto.agent.hooks.base import HookResult, PostToolUseHook, SuccessResult
 
 
 class PythonLintHook(PostToolUseHook):
@@ -31,7 +31,7 @@ class PythonLintHook(PostToolUseHook):
     def run(self) -> HookResult:
         path = self.arguments.get("path")
         if not path:
-            return HookResult(success=True)
+            return SuccessResult()
 
         try:
             # Run ruff check --fix
@@ -53,4 +53,4 @@ class PythonLintHook(PostToolUseHook):
             # Silently ignore errors in the hook itself to not disrupt the agent loop
             pass
 
-        return HookResult(success=True)
+        return SuccessResult()

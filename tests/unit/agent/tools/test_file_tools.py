@@ -117,10 +117,15 @@ def test_run_grep_search_mock(mock_context):
 
 
 def test_run_grep_search_timeout(mock_context):
-    from meto.conf import settings
     import subprocess
+
+    from meto.conf import settings
+
     with patch("shutil.which", return_value="/usr/bin/rg"):
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="rg", timeout=settings.TOOL_TIMEOUT_SECONDS)):
+        with patch(
+            "subprocess.run",
+            side_effect=subprocess.TimeoutExpired(cmd="rg", timeout=settings.TOOL_TIMEOUT_SECONDS),
+        ):
             result = run_grep_search(mock_context, "match", path=".")
             assert f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s)" in result
             assert "METO_TOOL_TIMEOUT_SECONDS" in result

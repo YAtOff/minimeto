@@ -99,6 +99,14 @@ class ReasoningLogger:
                 self._logger.removeHandler(h)
         self._json_handler = None
 
+    def __enter__(self) -> "ReasoningLogger":
+        """Support context manager protocol."""
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Support context manager protocol with automatic cleanup."""
+        self.close()
+
     def _log(self, level: int, msg: str, **kwargs: Any) -> None:
         """Internal log method that adds session context."""
         extra = {

@@ -4,10 +4,25 @@ from typing import Any, ClassVar, Protocol
 
 
 @dataclass(frozen=True)
-class HookResult:
-    success: bool
-    error: str | None = None
-    injected_content: str | None = None
+class SuccessResult:
+    """Action is allowed and nothing else is needed."""
+
+
+@dataclass(frozen=True)
+class ErrorResult:
+    """Action is blocked or failed."""
+
+    error: str
+
+
+@dataclass(frozen=True)
+class InjectedResult:
+    """Action is allowed, but some context was injected into system prompt."""
+
+    injected_content: str
+
+
+type HookResult = SuccessResult | ErrorResult | InjectedResult
 
 
 class Hook(Protocol):

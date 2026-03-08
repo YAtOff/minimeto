@@ -14,6 +14,15 @@ class PendingTool:
     schema: dict[str, Any]
     handler: ToolHandler
 
+    def __post_init__(self) -> None:
+        """Validate the tool schema structure."""
+        if "function" not in self.schema:
+            raise ValueError("PendingTool schema must contain 'function' key")
+        if "name" not in self.schema["function"]:
+            raise ValueError("PendingTool schema must contain 'function.name'")
+        if not callable(self.handler):
+            raise ValueError("PendingTool handler must be callable")
+
 
 @dataclass
 class Context:
@@ -40,6 +49,9 @@ class Context:
     @property
     def history(self) -> Sequence[dict[str, Any]]:
         """Return an immutable view of the conversation history."""
+        # Using tuple() provides a snapshot; for a live read-only view,
+        # we could use a custom Sequence implementation, but tuple is safer
+        # against concurrent modification of the underlying list during iteration.
         return tuple(self._history)
 
     def add_message(self, message: dict[str, Any]) -> None:

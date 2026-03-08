@@ -3,15 +3,21 @@
 from typing import Any
 
 from meto.agent.hooks.base import (
+    ErrorResult,
     HookResult,
+    InjectedResult,
     PostToolUseHook,
     PreToolUseHook,
+    SuccessResult,
 )
 
 __all__ = [
+    "ErrorResult",
     "HookResult",
+    "InjectedResult",
     "PostToolUseHook",
     "PreToolUseHook",
+    "SuccessResult",
     "post_tool_use",
     "pre_tool_use",
 ]
@@ -23,12 +29,9 @@ def pre_tool_use(tool_name: str, arguments: dict[str, Any]) -> HookResult:
         hook_instance = hook_cls(tool_name, arguments)
         if hook_instance.matches():
             result = hook_instance.run()
-            if not result.success:
+            if isinstance(result, (ErrorResult, InjectedResult)):
                 return result
-            elif result.injected_content:
-                # If content was injected, we can stop here since the context will be updated
-                return result
-    return HookResult(success=True)
+    return SuccessResult()
 
 
 def post_tool_use(tool_name: str, arguments: dict[str, Any], output: str) -> HookResult:
@@ -37,9 +40,9 @@ def post_tool_use(tool_name: str, arguments: dict[str, Any], output: str) -> Hoo
         hook_instance = hook_cls(tool_name, arguments, output)
         if hook_instance.matches():
             result = hook_instance.run()
-            if not result.success:
+            if isinstance(result, ErrorResult):
                 return result
-    return HookResult(success=True)
+    return SuccessResult()
 
 
 # New hooks can be added to this list to be imported and registered

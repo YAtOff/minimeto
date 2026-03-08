@@ -2,7 +2,7 @@ import fnmatch
 from pathlib import Path
 from typing import override
 
-from .base import HookResult, PreToolUseHook
+from .base import ErrorResult, HookResult, PreToolUseHook, SuccessResult
 
 
 class SafeReadHook(PreToolUseHook):
@@ -35,7 +35,7 @@ class SafeReadHook(PreToolUseHook):
     def run(self) -> HookResult:
         path_str = self.arguments.get("path", "")
         if not path_str:
-            return HookResult(success=True)
+            return SuccessResult()
 
         path = Path(path_str)
 
@@ -51,8 +51,7 @@ class SafeReadHook(PreToolUseHook):
         for p in [path, resolved_path]:
             # Check directory parts
             if any(part in self.forbidden_dirs for part in p.parts):
-                return HookResult(
-                    success=False,
+                return ErrorResult(
                     error=f"Blocked! Access to '{path_str}' (part of {p}) is not allowed for security reasons.",
                 )
 
@@ -60,9 +59,8 @@ class SafeReadHook(PreToolUseHook):
             name = p.name
             for pattern in self.forbidden_patterns:
                 if fnmatch.fnmatch(name, pattern):
-                    return HookResult(
-                        success=False,
+                    return ErrorResult(
                         error=f"Blocked! Access to '{path_str}' is not allowed for security reasons.",
                     )
 
-        return HookResult(success=True)
+        return SuccessResult()

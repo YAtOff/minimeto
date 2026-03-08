@@ -18,7 +18,12 @@ from typing import TYPE_CHECKING, Any, cast
 
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
-from meto.agent.hooks import post_tool_use, pre_tool_use
+from meto.agent.hooks import (
+    ErrorResult,
+    InjectedResult,
+    post_tool_use,
+    pre_tool_use,
+)
 from meto.agent.hooks.rule_injection import RuleInjectionHook
 from meto.agent.orchestrator.client import get_client
 from meto.agent.orchestrator.signals import handle_interrupt
@@ -57,8 +62,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
             continue
         register_tool_handler(registration.name, registration.handler)
 
-    reasoning_logger = ReasoningLogger(agent.name)
-    try:
+    with ReasoningLogger(agent.name) as reasoning_logger:
         reasoning_logger.log_system_prompt(build_system_prompt(agent.prompt))
         reasoning_logger.log_user_input(prompt)
         context.add_message({"role": "user", "content": prompt})
@@ -171,7 +175,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                     # Check pre-execution hooks
                     pre_tool_hook_result = pre_tool_use(fn_name, arguments)
-                    if not pre_tool_hook_result.success:
+                    if isinstance(pre_tool_hook_result, ErrorResult):
                         context.add_message(
                             {
                                 "role": "tool",
@@ -183,7 +187,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         continue
 
                     # Inject content if provided by hook (e.g., rules)
-                    if pre_tool_hook_result.injected_content:
+                    if isinstance(pre_tool_hook_result, InjectedResult):
                         reasoning_logger.log_injected_context(
                             pre_tool_hook_result.injected_content,
                             fn_name,
@@ -207,7 +211,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                     # Check post-execution hooks
                     post_tool_hook_result = post_tool_use(fn_name, arguments, tool_output)
-                    if not post_tool_hook_result.success:
+                    if isinstance(post_tool_hook_result, ErrorResult):
                         tool_output += (
                             f"\n\n[System] Post-action check failed: {post_tool_hook_result.error}"
                         )
@@ -238,5 +242,3 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
         reasoning_logger.log_loop_completion(f"Reached max turns ({agent.max_turns})")
         raise MaxStepsExceededError(f"Exceeded maximum of {agent.max_turns} turns")
-    finally:
-        reasoning_logger.close()

@@ -11,7 +11,7 @@ from typing import override
 
 from meto.agent.permissions import PermissionManager
 
-from .base import HookResult, PreToolUseHook
+from .base import ErrorResult, HookResult, PreToolUseHook, SuccessResult
 
 
 class PermissionHook(PreToolUseHook, ABC):
@@ -43,7 +43,7 @@ class PermissionHook(PreToolUseHook, ABC):
         """Execute the permission check."""
         # Check if permission is needed
         if not self.should_check_permission():
-            return HookResult(success=True)
+            return SuccessResult()
 
         # Get permission details
         key = self.get_permission_key()
@@ -51,11 +51,10 @@ class PermissionHook(PreToolUseHook, ABC):
 
         # Check permission via manager
         if PermissionManager.check_permission(key, message):
-            return HookResult(success=True)
+            return SuccessResult()
 
         # Permission denied
-        return HookResult(
-            success=False,
+        return ErrorResult(
             error=f"Permission denied: {message}",
         )
 
