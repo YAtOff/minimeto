@@ -20,3 +20,11 @@ def test_agent_tools_is_immutable():
 def test_agent_tool_names():
     agent = Agent(name="test", prompt="", allowed_tools=[], max_turns=10)
     assert agent.tool_names == []
+
+
+def test_agent_max_turns_validation():
+    with pytest.raises(ValueError, match="max_turns must be at least 1"):
+        Agent(name="test", prompt="", allowed_tools="*", max_turns=0)
+
+    with pytest.raises(ValueError, match="max_turns must be at least 1"):
+        Agent(name="test", prompt="", allowed_tools="*", max_turns=-1)

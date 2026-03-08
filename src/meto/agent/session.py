@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import random
+import re
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -145,6 +146,12 @@ class Session:
         from meto.agent.permissions import PermissionManager
 
         PermissionManager.reset()
+
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", session_id):
+            raise ValueError(
+                f"Invalid session ID format: '{session_id}'. "
+                "Only alphanumeric characters, underscores and hyphens are allowed."
+            )
 
         session_file = session_dir / f"session-{session_id}.jsonl"
 

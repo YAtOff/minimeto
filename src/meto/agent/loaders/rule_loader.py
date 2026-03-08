@@ -45,6 +45,9 @@ class RuleMetadata:
             path: Path to rule file
             content: Full rule content (markdown body)
         """
+        if not patterns:
+            raise ValueError(f"Rule '{name}' must have at least one pattern")
+
         self.name = name
         self.description = description
         self.patterns = patterns

@@ -162,6 +162,9 @@ class Agent:
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
         """
+        if max_turns <= 0:
+            raise ValueError(f"max_turns must be at least 1, got {max_turns}")
+
         self.name = name
         self.prompt = prompt
         self.max_turns = max_turns

@@ -21,6 +21,17 @@ class ToolRegistration:
     description: str
     handler: ToolHandler
 
+    def __post_init__(self) -> None:
+        """Validate registration metadata."""
+        if not self.name:
+            raise ValueError("Tool name cannot be empty")
+
+        schema_name = self.schema.get("function", {}).get("name")
+        if schema_name != self.name:
+            raise ValueError(
+                f"Tool name mismatch: '{self.name}' != '{schema_name}' in schema"
+            )
+
 
 class ToolRegistry:
     """Manages extra tools and provides simple keyword search."""

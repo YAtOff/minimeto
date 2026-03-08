@@ -1,6 +1,30 @@
 import logging
+import pytest
 
-from meto.agent.tool_registry import ToolRegistry
+from meto.agent.tool_registry import ToolRegistration, ToolRegistry
+
+
+def test_tool_registration_validation():
+    def handler(_ctx, _params):
+        return "result"
+
+    schema = {"type": "function", "function": {"name": "right_name", "parameters": {}}}
+
+    # Valid registration
+    tr = ToolRegistration(
+        name="right_name", schema=schema, description="test", handler=handler
+    )
+    assert tr.name == "right_name"
+
+    # Mismatched name
+    with pytest.raises(ValueError, match="Tool name mismatch"):
+        ToolRegistration(
+            name="wrong_name", schema=schema, description="test", handler=handler
+        )
+
+    # Empty name
+    with pytest.raises(ValueError, match="Tool name cannot be empty"):
+        ToolRegistration(name="", schema=schema, description="test", handler=handler)
 
 
 def test_tool_registry_no_overwrite_by_default(caplog):

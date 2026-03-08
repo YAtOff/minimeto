@@ -18,3 +18,14 @@ def test_session_new_creates_unique_ids():
     s1 = Session.new()
     s2 = Session.new()
     assert s1.session_id != s2.session_id
+
+
+def test_session_id_format_validation():
+    with pytest.raises(ValueError, match="Invalid session ID format"):
+        Session.load("../traversal")
+
+    with pytest.raises(ValueError, match="Invalid session ID format"):
+        Session.load("spaces are not allowed")
+
+    with pytest.raises(ValueError, match="Invalid session ID format"):
+        Session.load("special!@#")
