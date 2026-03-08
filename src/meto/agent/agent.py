@@ -16,7 +16,7 @@ from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
 
 
-def get_tools_for_agent(allowed_tools: list[str] | str) -> list[dict[str, Any]]:
+def get_tools_for_agent(allowed_tools: list[str] | str) -> tuple[dict[str, Any], ...]:
     """Return the list of tool schemas for the given allowlist.
 
     Args:
@@ -37,7 +37,7 @@ def get_tools_for_agent(allowed_tools: list[str] | str) -> list[dict[str, Any]]:
                 if registration.name not in static_tool_names:
                     tools.append(registration.schema)
 
-        return tools
+        return tuple(tools)
 
     static_tools = {tool["function"]["name"]: tool for tool in TOOLS}
     resolved: list[dict[str, Any]] = []
@@ -52,7 +52,7 @@ def get_tools_for_agent(allowed_tools: list[str] | str) -> list[dict[str, Any]]:
         if registration is not None:
             resolved.append(registration.schema)
 
-    return resolved
+    return tuple(resolved)
 
 
 class Agent:
@@ -66,7 +66,7 @@ class Agent:
 
     name: str
     prompt: str
-    tools: list[dict[str, Any]]
+    tools: tuple[dict[str, Any], ...]
     max_turns: int
 
     @classmethod

@@ -229,7 +229,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                                 continue
 
                             if schema_name not in existing_tool_names:
-                                agent.tools.append(pending_tool.schema)
+                                agent.tools = (*agent.tools, pending_tool.schema)
                                 existing_tool_names.add(schema_name)
 
                             register_tool_handler(schema_name, pending_tool.handler)
