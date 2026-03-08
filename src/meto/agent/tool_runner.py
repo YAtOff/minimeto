@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from meto.agent.context import Context
+from meto.agent.exceptions import AgentError
 from meto.agent.tools.file_tools import (
     handle_grep_search,
     handle_insert_in_file,
@@ -131,7 +132,7 @@ def run_tool(
             strategies_with_result = {"full", "result_only"}
             if logger and log_strategy in strategies_with_result:
                 logger.log_tool_execution(tool_name, tool_output, error=False)
-        except Exception as e:
+        except (AgentError, ValueError, OSError) as e:
             tool_output = str(e)
             # Always log errors regardless of strategy
             if logger:
