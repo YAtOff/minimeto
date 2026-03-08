@@ -360,6 +360,8 @@ Conversation:
 
     except Exception as e:
         logger.warning(f"LLM summarization failed: {e}")
+        # Notify user of failure
+        Console().print(f"[bold yellow]Warning:[/] AI summarization failed: {e}. Falling back to rule-based summary.")
         return None
 
 
