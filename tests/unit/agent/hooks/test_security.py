@@ -1,4 +1,3 @@
-from meto.agent.hooks.base import ErrorResult, SuccessResult
 from meto.agent.hooks.security import SafeReadHook
 
 

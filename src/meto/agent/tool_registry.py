@@ -28,9 +28,7 @@ class ToolRegistration:
 
         schema_name = self.schema.get("function", {}).get("name")
         if schema_name != self.name:
-            raise ValueError(
-                f"Tool name mismatch: '{self.name}' != '{schema_name}' in schema"
-            )
+            raise ValueError(f"Tool name mismatch: '{self.name}' != '{schema_name}' in schema")
 
 
 class ToolRegistry:

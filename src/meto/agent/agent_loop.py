@@ -19,8 +19,6 @@ from typing import TYPE_CHECKING, Any, cast
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.hooks import (
-    ErrorResult,
-    InjectedResult,
     post_tool_use,
     pre_tool_use,
 )

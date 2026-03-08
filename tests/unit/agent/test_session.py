@@ -1,6 +1,6 @@
-import pytest
 import json
-from pathlib import Path
+
+import pytest
 
 from meto.agent.exceptions import SessionNotFoundError
 from meto.agent.session import Session
@@ -35,29 +35,40 @@ def test_session_id_format_validation():
 
 from unittest.mock import patch
 
+
 def test_session_load_malformed_json_logs_warning(tmp_path):
     session_id = "test-session"
     session_file = tmp_path / f"session-{session_id}.jsonl"
-    
+
     header = {"session_id": session_id, "working_dir": str(tmp_path)}
-    user_msg = {"role": "user", "content": "hello", "timestamp": "2024-03-08T12:00:00Z", "session_id": session_id}
+    user_msg = {
+        "role": "user",
+        "content": "hello",
+        "timestamp": "2024-03-08T12:00:00Z",
+        "session_id": session_id,
+    }
     malformed_line = "{malformed json"
-    assistant_msg = {"role": "assistant", "content": "hi", "timestamp": "2024-03-08T12:00:01Z", "session_id": session_id}
-    
+    assistant_msg = {
+        "role": "assistant",
+        "content": "hi",
+        "timestamp": "2024-03-08T12:00:01Z",
+        "session_id": session_id,
+    }
+
     with open(session_file, "w") as f:
         f.write(json.dumps(header) + "\n")
         f.write(json.dumps(user_msg) + "\n")
         f.write(malformed_line + "\n")
         f.write(json.dumps(assistant_msg) + "\n")
-    
+
     with patch("meto.agent.session.logger") as mock_logger:
         session = Session.load(session_id, session_dir=tmp_path)
-    
+
     # Check that logger.warning was called with expected messages
     warning_calls = [call.args[0] for call in mock_logger.warning.call_args_list]
     assert any("Skipping malformed line 2 in session test-session" in m for m in warning_calls)
     assert any("skipped 1 malformed lines. History may be incomplete." in m for m in warning_calls)
-    
+
     assert len(session.history) == 2
     assert session.history[0]["content"] == "hello"
     assert session.history[1]["content"] == "hi"

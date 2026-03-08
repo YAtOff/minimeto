@@ -1,7 +1,6 @@
 import logging
 from unittest.mock import patch
 
-from meto.agent.hooks.base import SuccessResult
 from meto.agent.hooks.python_lint import PythonLintHook
 
 
