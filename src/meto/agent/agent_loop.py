@@ -175,7 +175,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                     # Check pre-execution hooks
                     pre_tool_hook_result = pre_tool_use(fn_name, arguments)
-                    if isinstance(pre_tool_hook_result, ErrorResult):
+                    if not pre_tool_hook_result.success:
                         context.add_message(
                             {
                                 "role": "tool",
@@ -187,7 +187,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         continue
 
                     # Inject content if provided by hook (e.g., rules)
-                    if isinstance(pre_tool_hook_result, InjectedResult):
+                    if pre_tool_hook_result.injected_content:
                         reasoning_logger.log_injected_context(
                             pre_tool_hook_result.injected_content,
                             fn_name,
@@ -211,7 +211,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                     # Check post-execution hooks
                     post_tool_hook_result = post_tool_use(fn_name, arguments, tool_output)
-                    if isinstance(post_tool_hook_result, ErrorResult):
+                    if not post_tool_hook_result.success:
                         tool_output += (
                             f"\n\n[System] Post-action check failed: {post_tool_hook_result.error}"
                         )

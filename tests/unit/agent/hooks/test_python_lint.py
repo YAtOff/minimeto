@@ -44,7 +44,7 @@ def test_python_lint_hook_run_success():
 
     with patch("subprocess.run") as mock_run:
         result = hook.run()
-        assert isinstance(result, SuccessResult)
+        assert result.success
         assert mock_run.call_count == 2
         # Verify ruff check --fix and ruff format were called
         mock_run.assert_any_call(
@@ -71,5 +71,5 @@ def test_python_lint_hook_run_exception(caplog):
     with patch("subprocess.run", side_effect=Exception("Ruff not found")):
         with caplog.at_level(logging.WARNING):
             result = hook.run()
-            assert isinstance(result, SuccessResult)
+            assert result.success
             assert "Python lint hook failed for test.py: Ruff not found" in caplog.text

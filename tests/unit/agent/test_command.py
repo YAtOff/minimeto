@@ -72,36 +72,39 @@ def test_compact_llm_failure_notification(capsys):
     session = MagicMock()
     # History long enough to trigger LLM summary
     session.history = [{"role": "user", "content": "Hello world" * 20}]
-    
+
     with patch("openai.OpenAI") as mock_openai:
         # Mocking OpenAI to raise an exception
         mock_openai.return_value.chat.completions.create.side_effect = Exception("API Error")
-        
+
         success, output = execute_chat_command("/compact", session)
-        
+
         # Verify it succeeded despite the LLM error (it should fallback to rule-based summary)
         assert success is True
-        
+
         # Check if the error was notified to the user on stdout/stderr
         captured = capsys.readouterr()
-        assert "AI summarization failed: API Error" in captured.out or "AI summarization failed: API Error" in captured.err
+        assert (
+            "AI summarization failed: API Error" in captured.out
+            or "AI summarization failed: API Error" in captured.err
+        )
 
 
 def test_compact_llm_success_no_notification(capsys):
     session = MagicMock()
     # History long enough to trigger LLM summary
     session.history = [{"role": "user", "content": "Hello world" * 20}]
-    
+
     with patch("openai.OpenAI") as mock_openai:
         # Mocking OpenAI to return a successful summary
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "This is a successful summary."
         mock_openai.return_value.chat.completions.create.return_value = mock_response
-        
+
         success, output = execute_chat_command("/compact", session)
-        
+
         assert success is True
-        
+
         captured = capsys.readouterr()
         assert "AI summarization failed" not in captured.out
         assert "AI summarization failed" not in captured.err

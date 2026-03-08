@@ -5,20 +5,20 @@ from meto.agent.hooks.security import SafeReadHook
 def test_safe_read_hook_allowed_file():
     hook = SafeReadHook(tool_name="read_file", arguments={"path": "src/main.py"})
     result = hook.run()
-    assert isinstance(result, SuccessResult)
+    assert result.success
 
 
 def test_safe_read_hook_forbidden_file():
     hook = SafeReadHook(tool_name="read_file", arguments={"path": ".env"})
     result = hook.run()
-    assert isinstance(result, ErrorResult)
+    assert not result.success
     assert "security reasons" in result.error
 
 
 def test_safe_read_hook_forbidden_dir():
     hook = SafeReadHook(tool_name="read_file", arguments={"path": ".git/config"})
     result = hook.run()
-    assert isinstance(result, ErrorResult)
+    assert not result.success
     assert "security reasons" in result.error
 
 
@@ -39,14 +39,14 @@ def test_safe_read_hook_resolves_symlink(tmp_path):
 
     hook = SafeReadHook(tool_name="read_file", arguments={"path": str(safe_link)})
     result = hook.run()
-    assert isinstance(result, ErrorResult)
+    assert not result.success
     assert "security reasons" in result.error
 
 
 def test_safe_read_hook_no_path():
     hook = SafeReadHook(tool_name="read_file", arguments={})
     result = hook.run()
-    assert isinstance(result, SuccessResult)
+    assert result.success
 
 
 def test_safe_read_hook_pattern_match():
@@ -55,4 +55,4 @@ def test_safe_read_hook_pattern_match():
     for f in forbidden_files:
         hook = SafeReadHook(tool_name="read_file", arguments={"path": f})
         result = hook.run()
-        assert isinstance(result, ErrorResult), f"File {f} should be blocked"
+        assert not result.success, f"File {f} should be blocked"

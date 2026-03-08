@@ -29,7 +29,7 @@ def pre_tool_use(tool_name: str, arguments: dict[str, Any]) -> HookResult:
         hook_instance = hook_cls(tool_name, arguments)
         if hook_instance.matches():
             result = hook_instance.run()
-            if isinstance(result, (ErrorResult, InjectedResult)):
+            if not result.success or result.injected_content:
                 return result
     return SuccessResult()
 
@@ -40,7 +40,7 @@ def post_tool_use(tool_name: str, arguments: dict[str, Any], output: str) -> Hoo
         hook_instance = hook_cls(tool_name, arguments, output)
         if hook_instance.matches():
             result = hook_instance.run()
-            if isinstance(result, ErrorResult):
+            if not result.success:
                 return result
     return SuccessResult()
 

@@ -4,25 +4,33 @@ from typing import Any, ClassVar, Protocol
 
 
 @dataclass(frozen=True)
-class SuccessResult:
+class HookResult:
+    """Result of a hook execution."""
+
+    success: bool
+    error: str | None = None
+    injected_content: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.success and not self.error:
+            raise ValueError("HookResult with success=False must have error message")
+        if self.success and self.error:
+            raise ValueError("HookResult with success=True should not have error")
+
+
+def SuccessResult() -> HookResult:
     """Action is allowed and nothing else is needed."""
+    return HookResult(success=True)
 
 
-@dataclass(frozen=True)
-class ErrorResult:
+def ErrorResult(error: str) -> HookResult:
     """Action is blocked or failed."""
+    return HookResult(success=False, error=error)
 
-    error: str
 
-
-@dataclass(frozen=True)
-class InjectedResult:
+def InjectedResult(injected_content: str) -> HookResult:
     """Action is allowed, but some context was injected into system prompt."""
-
-    injected_content: str
-
-
-type HookResult = SuccessResult | ErrorResult | InjectedResult
+    return HookResult(success=True, injected_content=injected_content)
 
 
 class Hook(Protocol):
