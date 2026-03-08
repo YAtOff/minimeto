@@ -144,14 +144,30 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         arguments_raw = getattr(fn, "arguments", None) or "{}"
                         arguments_any = json.loads(arguments_raw)
                     except (TypeError, json.JSONDecodeError) as e:
-                        arguments_any = {}
                         logger.error(f"Failed to parse arguments for {fn_name}: {e}")
+                        context.history.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_any.id,
+                                "content": f"Error: Could not parse tool arguments. {e}",
+                            }
+                        )
+                        continue
 
-                    arguments = (
-                        cast(dict[str, Any], arguments_any)
-                        if isinstance(arguments_any, dict)
-                        else {}
-                    )
+                    if not isinstance(arguments_any, dict):
+                        logger.error(
+                            f"Tool arguments for {fn_name} must be a dictionary, got {type(arguments_any).__name__}"
+                        )
+                        context.history.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_any.id,
+                                "content": f"Error: Tool arguments must be a dictionary, got {type(arguments_any).__name__}",
+                            }
+                        )
+                        continue
+
+                    arguments = cast(dict[str, Any], arguments_any)
 
                     # Check pre-execution hooks
                     pre_tool_hook_result = pre_tool_use(fn_name, arguments)
