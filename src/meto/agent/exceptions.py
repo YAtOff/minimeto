@@ -5,6 +5,10 @@ class AgentError(Exception):
     """Base class for meto agent errors."""
 
 
+class SessionNotFoundError(AgentError):
+    """Raised when a session file cannot be found."""
+
+
 class SubagentError(AgentError):
     """Raised when a subagent cannot be created or executed."""
 

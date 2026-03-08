@@ -108,7 +108,13 @@ def run(
     if ctx.invoked_subcommand is not None:
         return
 
-    session = Session.load(session_id) if session_id else Session.new()
+    from meto.agent.exceptions import SessionNotFoundError
+
+    try:
+        session = Session.load(session_id) if session_id else Session.new()
+    except SessionNotFoundError as e:
+        print(f"[Warning] {e}. Starting a new session.", file=sys.stderr)
+        session = Session.new()
 
     if one_shot:
         # Determine input source based on precedence rules

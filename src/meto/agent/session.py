@@ -141,6 +141,7 @@ class Session:
         If a compact marker exists in the session file, only messages after
         the last compact marker are loaded. The full history is preserved on disk.
         """
+        from meto.agent.exceptions import SessionNotFoundError
         from meto.agent.permissions import PermissionManager
 
         PermissionManager.reset()
@@ -148,7 +149,7 @@ class Session:
         session_file = session_dir / f"session-{session_id}.jsonl"
 
         if not session_file.exists():
-            return cls.new()  # Return new session if file doesn't exist
+            raise SessionNotFoundError(f"Session '{session_id}' not found at {session_file}")
 
         info = {}
         messages = []
