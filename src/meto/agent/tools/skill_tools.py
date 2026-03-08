@@ -1,11 +1,21 @@
 """Skill and agent management."""
 
 import json
+import logging
+import random
+import string
 from typing import Any
 
 from meto.agent.context import Context
 from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
 from meto.agent.loaders import get_skill_loader
+
+logger = logging.getLogger(__name__)
+
+
+def generate_error_id() -> str:
+    """Generate a short random error ID for tracking."""
+    return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
 
 
 def load_skill(context: Context, skill_name: str) -> str:
@@ -45,6 +55,10 @@ def load_skill(context: Context, skill_name: str) -> str:
         return f"Error: {e}"
     except OSError as ex:
         return f"Error: Failed to load skill '{skill_name}': {ex}"
+    except Exception as ex:
+        error_id = generate_error_id()
+        logger.exception(f"[{error_id}] Unexpected error loading skill '{skill_name}': {ex}")
+        return f"Error: Failed to load skill '{skill_name}' due to an unexpected internal error (Error ID: {error_id})."
 
 
 def load_agent(context: Context, agent_name: str) -> str:
@@ -79,8 +93,13 @@ def load_agent(context: Context, agent_name: str) -> str:
     except SkillAgentValidationError as e:
         return f"Error: {e}"
     except Exception as ex:
+        error_id = generate_error_id()
+        logger.exception(
+            f"[{error_id}] Unexpected error loading agent '{agent_name}' from skill '{context.active_skill}': {ex}"
+        )
         return (
-            f"Error: Failed to load agent '{agent_name}' from skill '{context.active_skill}': {ex}"
+            f"Error: Failed to load agent '{agent_name}' from skill '{context.active_skill}' "
+            f"due to an unexpected internal error (Error ID: {error_id})."
         )
 
 
