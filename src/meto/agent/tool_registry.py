@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 ToolHandler = Callable[[Any, dict[str, Any]], str]
 
@@ -31,7 +34,29 @@ class ToolRegistry:
         schema: dict[str, Any],
         handler: ToolHandler,
         description: str,
+        *,
+        allow_overwrite: bool = False,
     ) -> None:
+        if name in self.catalog:
+            existing = self.catalog[name]
+            if (
+                existing.handler == handler
+                and existing.schema == schema
+                and existing.description == description
+            ):
+                # Perfectly fine to re-register the exact same tool
+                return
+
+            if not allow_overwrite:
+                logger.warning(
+                    "Tool '%s' already registered in registry with different implementation. "
+                    "Skipping registration. Use allow_overwrite=True to force overwrite.",
+                    name,
+                )
+                return
+
+            logger.warning("Overwriting existing tool registration in registry: %s", name)
+
         self.catalog[name] = ToolRegistration(
             name=name,
             schema=schema,

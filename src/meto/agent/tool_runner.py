@@ -11,10 +11,15 @@ Architectural constraint:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from meto.agent.context import Context
+
+logger = logging.getLogger(__name__)
+
+
 from meto.agent.exceptions import AgentError
 from meto.agent.tools.file_tools import (
     handle_grep_search,
@@ -42,6 +47,8 @@ ToolHandler = Callable[[Context, dict[str, Any]], str]
 
 def register_tool_handler(tool_name: str, handler: ToolHandler) -> None:
     """Register or replace a runtime tool handler."""
+    if tool_name in _TOOL_HANDLERS and _TOOL_HANDLERS[tool_name] != handler:
+        logger.warning("Overwriting existing tool handler with a different one: %s", tool_name)
     _TOOL_HANDLERS[tool_name] = handler
 
 
