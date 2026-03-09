@@ -85,12 +85,14 @@ def exit(ctx: "Context"):
     ctx.invoke(quit)
 
 
-@chat_commands.command()
+@chat_commands.command(name="help")
 @click.pass_context
-def help(ctx: "Context"):  # pyright: ignore[reportShadowingBuiltins]
+def show_help(ctx: "Context"):
     """Show available commands."""
-    echo = click.echo
-    echo(chat_commands.get_help(ctx))
+    if ctx.parent:
+        click.echo(ctx.parent.get_help())
+    else:
+        click.echo(ctx.get_help())
 
 
 @chat_commands.command()

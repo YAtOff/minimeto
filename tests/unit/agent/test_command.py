@@ -20,15 +20,18 @@ def test_execute_chat_command_unknown():
     assert "Unknown command" in output
 
 
-def test_execute_chat_command_help():
+def test_execute_chat_command_help(capsys):
     session = MagicMock()
-    with patch("meto.agent.command.chat_commands.get_help") as mock_get_help:
-        mock_get_help.return_value = "Help text"
-        success, output = execute_chat_command("/help", session)
-        assert success is True
-        assert (
-            output == ""
-        )  # help echos to stdout, so execute_chat_command returns empty string on success
+    success, output = execute_chat_command("/help", session)
+    assert success is True
+    assert output == ""
+    
+    captured = capsys.readouterr()
+    assert "Usage:" in captured.out
+    assert "help" in captured.out
+    assert "quit" in captured.out
+    assert "agents" in captured.out
+    assert "skills" in captured.out
 
 
 def test_execute_chat_command_new():
