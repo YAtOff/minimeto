@@ -86,7 +86,7 @@ class SessionLogger:
         self._append(msg)
 
     def log_compact(self, summary: str) -> None:
-        """Log compact marker with summary.
+        """Log a compact marker with summary.
 
         When a session is reloaded, all messages before the last compact
         marker will be skipped, reducing memory usage while preserving
@@ -100,17 +100,42 @@ class SessionLogger:
         }
         self._append(msg)
 
+    def log_checkpoint(self, name: str) -> None:
+        """Log a named checkpoint marker."""
+        msg = {
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+            "role": "checkpoint",
+            "name": name,
+            "session_id": self.session_id,
+        }
+        self._append(msg)
+
+    def log_rewind(self, name: str) -> None:
+        """Log a rewind marker to truncate history to a checkpoint."""
+        msg = {
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+            "role": "rewind",
+            "to_checkpoint": name,
+            "session_id": self.session_id,
+        }
+        self._append(msg)
+
 
 class SessionHistory(list[dict[str, Any]]):
     """List that auto-logs appends to session_logger."""
 
     _session_logger: SessionLogger
+    checkpoints: dict[str, int]
 
     def __init__(
-        self, session_logger: SessionLogger, initial_data: list[dict[str, Any]] | None = None
+        self,
+        session_logger: SessionLogger,
+        initial_data: list[dict[str, Any]] | None = None,
+        checkpoints: dict[str, int] | None = None,
     ) -> None:
         super().__init__(initial_data or [])
         self._session_logger = session_logger
+        self.checkpoints = checkpoints or {}
 
     @override
     def append(self, item: dict[str, Any]) -> None:
@@ -126,6 +151,25 @@ class SessionHistory(list[dict[str, Any]]):
     def log_compact(self, summary: str) -> None:
         """Log a compact marker via the session logger."""
         self._session_logger.log_compact(summary)
+
+    def log_checkpoint(self, name: str) -> None:
+        """Create a checkpoint at the current history length."""
+        self.checkpoints[name] = len(self)
+        self._session_logger.log_checkpoint(name)
+
+    def log_rewind(self, name: str) -> bool:
+        """Rewind history to the specified checkpoint.
+
+        Returns:
+            True if checkpoint was found and rewound, False otherwise.
+        """
+        if name not in self.checkpoints:
+            return False
+
+        idx = self.checkpoints[name]
+        del self[idx:]
+        self._session_logger.log_rewind(name)
+        return True
 
 
 class Session:
@@ -180,6 +224,7 @@ class Session:
                             continue
 
             # Second pass: extract messages (skip header + pre-compact messages)
+            checkpoints: dict[str, int] = {}
             for i, raw in lines:
                 if i == 0:
                     info = {
@@ -193,6 +238,19 @@ class Session:
 
                 # Skip compact markers themselves
                 if raw.get("role") == "compact":
+                    continue
+
+                if raw.get("role") == "checkpoint":
+                    name = raw.get("name")
+                    if name:
+                        checkpoints[name] = len(messages)
+                    continue
+
+                if raw.get("role") == "rewind":
+                    name = raw.get("to_checkpoint")
+                    if name and name in checkpoints:
+                        idx = checkpoints[name]
+                        del messages[idx:]
                     continue
 
                 # Extract OpenAI message format, strip metadata
@@ -222,7 +280,7 @@ class Session:
         working_dir = Path(info.get("working_dir", os.fspath(Path.cwd())))
         os.chdir(working_dir)
         session_logger = SessionLogger(session_id)
-        history = SessionHistory(session_logger, initial_data=messages)
+        history = SessionHistory(session_logger, initial_data=messages, checkpoints=checkpoints)
         return cls(session_id=session_id, working_dir=working_dir, history=history)
 
     @classmethod
@@ -241,7 +299,7 @@ class Session:
                 "working_dir": os.fspath(working_dir),
             }
         )
-        history = SessionHistory(session_logger)
+        history = SessionHistory(session_logger, checkpoints={})
         return cls(session_id=session_id, working_dir=working_dir, history=history)
 
     def __init__(

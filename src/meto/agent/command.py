@@ -437,6 +437,28 @@ def compact(ctx: "Context"):
     session.compact(summary)
 
 
+@chat_commands.command()
+@click.argument("name", type=str)
+@click.pass_context
+def checkpoint(ctx: "Context", name: str):
+    """Save a checkpoint of the current session history."""
+    session = ctx.obj["session"]
+    session.history.log_checkpoint(name)
+    click.echo(f"Checkpoint '{name}' saved.")
+
+
+@chat_commands.command()
+@click.argument("name", type=str)
+@click.pass_context
+def rewind(ctx: "Context", name: str):
+    """Rewind session history to a saved checkpoint."""
+    session = ctx.obj["session"]
+    if session.history.log_rewind(name):
+        click.echo(f"Rewound history to checkpoint '{name}'.")
+    else:
+        click.echo(f"Checkpoint '{name}' not found.", err=True)
+
+
 def execute_chat_command(cmdline: str, session: "Session") -> tuple[bool, str]:
     """Execute chat command with session access.
 

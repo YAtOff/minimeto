@@ -25,7 +25,7 @@ def test_execute_chat_command_help(capsys):
     success, output = execute_chat_command("/help", session)
     assert success is True
     assert output == ""
-    
+
     captured = capsys.readouterr()
     assert "Usage:" in captured.out
     assert "help" in captured.out
