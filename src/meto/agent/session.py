@@ -8,11 +8,20 @@ import os
 import random
 import re
 import threading
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, override
 
 from meto.conf import settings
+
+
+@dataclass
+class Node:
+    message: dict[str, Any]
+    parent: Node | None = None
+    children: list[Node] = field(default_factory=list)
+
 
 logger = logging.getLogger("agent")
 
@@ -125,21 +134,38 @@ class SessionHistory(list[dict[str, Any]]):
     """List that auto-logs appends to session_logger."""
 
     _session_logger: SessionLogger
-    checkpoints: dict[str, int]
+    checkpoints: dict[str, Node]
+    head: Node | None
 
     def __init__(
         self,
         session_logger: SessionLogger,
-        initial_data: list[dict[str, Any]] | None = None,
-        checkpoints: dict[str, int] | None = None,
+        head: Node | None = None,
+        checkpoints: dict[str, Node] | None = None,
     ) -> None:
-        super().__init__(initial_data or [])
         self._session_logger = session_logger
+        self.head = head
         self.checkpoints = checkpoints or {}
+        super().__init__([node.message for node in self._get_active_path()])
+
+    def _get_active_path(self) -> list[Node]:
+        curr = self.head
+        path: list[Node] = []
+        while curr:
+            path.append(curr)
+            curr = curr.parent
+        path.reverse()
+        return path
 
     @override
     def append(self, item: dict[str, Any]) -> None:
+        node = Node(item, parent=self.head)
+        if self.head:
+            self.head.children.append(node)
+        self.head = node
+
         super().append(item)
+
         role = item.get("role")
         if role == "user":
             self._session_logger.log_user(item["content"])
@@ -153,9 +179,10 @@ class SessionHistory(list[dict[str, Any]]):
         self._session_logger.log_compact(summary)
 
     def log_checkpoint(self, name: str) -> None:
-        """Create a checkpoint at the current history length."""
-        self.checkpoints[name] = len(self)
-        self._session_logger.log_checkpoint(name)
+        """Create a checkpoint at the current history state."""
+        if self.head:
+            self.checkpoints[name] = self.head
+            self._session_logger.log_checkpoint(name)
 
     def log_rewind(self, name: str) -> bool:
         """Rewind history to the specified checkpoint.
@@ -166,8 +193,10 @@ class SessionHistory(list[dict[str, Any]]):
         if name not in self.checkpoints:
             return False
 
-        idx = self.checkpoints[name]
-        del self[idx:]
+        self.head = self.checkpoints[name]
+        self.clear()
+        self.extend([node.message for node in self._get_active_path()])
+
         self._session_logger.log_rewind(name)
         return True
 
@@ -203,8 +232,10 @@ class Session:
             raise SessionNotFoundError(f"Session '{session_id}' not found at {session_file}")
 
         info = {}
-        messages = []
         last_compact_index = -1
+        head: Node | None = None
+        checkpoints: dict[str, Node] = {}
+        messages_loaded = 0
 
         # First pass: read all lines and find last compact marker
         skipped_count = 0
@@ -223,8 +254,7 @@ class Session:
                             skipped_count += 1
                             continue
 
-            # Second pass: extract messages (skip header + pre-compact messages)
-            checkpoints: dict[str, int] = {}
+            # Second pass: construct history tree (skip header + pre-compact messages)
             for i, raw in lines:
                 if i == 0:
                     info = {
@@ -242,15 +272,14 @@ class Session:
 
                 if raw.get("role") == "checkpoint":
                     name = raw.get("name")
-                    if name:
-                        checkpoints[name] = len(messages)
+                    if name and head:
+                        checkpoints[name] = head
                     continue
 
                 if raw.get("role") == "rewind":
                     name = raw.get("to_checkpoint")
                     if name and name in checkpoints:
-                        idx = checkpoints[name]
-                        del messages[idx:]
+                        head = checkpoints[name]
                     continue
 
                 # Extract OpenAI message format, strip metadata
@@ -259,12 +288,17 @@ class Session:
                     msg["tool_calls"] = raw["tool_calls"]
                 if "tool_call_id" in raw:
                     msg["tool_call_id"] = raw["tool_call_id"]
-                messages.append(msg)
+
+                new_node = Node(msg, parent=head)
+                if head:
+                    head.children.append(new_node)
+                head = new_node
+                messages_loaded += 1
 
             if last_compact_index >= 0:
                 logger.info(
                     f"Session {session_id}: compact marker at line {last_compact_index}, "
-                    f"loading {len(messages)} messages after compact"
+                    f"loading messages after compact"
                 )
 
             if skipped_count > 0:
@@ -280,7 +314,7 @@ class Session:
         working_dir = Path(info.get("working_dir", os.fspath(Path.cwd())))
         os.chdir(working_dir)
         session_logger = SessionLogger(session_id)
-        history = SessionHistory(session_logger, initial_data=messages, checkpoints=checkpoints)
+        history = SessionHistory(session_logger, head=head, checkpoints=checkpoints)
         return cls(session_id=session_id, working_dir=working_dir, history=history)
 
     @classmethod
@@ -299,7 +333,7 @@ class Session:
                 "working_dir": os.fspath(working_dir),
             }
         )
-        history = SessionHistory(session_logger, checkpoints={})
+        history = SessionHistory(session_logger, head=None, checkpoints={})
         return cls(session_id=session_id, working_dir=working_dir, history=history)
 
     def __init__(

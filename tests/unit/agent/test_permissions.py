@@ -6,7 +6,10 @@ from meto.conf import settings
 
 def test_permission_manager_granted_yes():
     PermissionManager.reset()
-    with patch("meto.agent.permissions.PromptSession") as mock_session:
+    with (
+        patch.object(settings, "PERMISSIONS_ENABLED", True),
+        patch("meto.agent.permissions.PromptSession") as mock_session,
+    ):
         mock_session.return_value.prompt.return_value = "yes"
         assert PermissionManager.check_permission("test", "Message") is True
         # Should not be cached
@@ -15,7 +18,10 @@ def test_permission_manager_granted_yes():
 
 def test_permission_manager_granted_always():
     PermissionManager.reset()
-    with patch("meto.agent.permissions.PromptSession") as mock_session:
+    with (
+        patch.object(settings, "PERMISSIONS_ENABLED", True),
+        patch("meto.agent.permissions.PromptSession") as mock_session,
+    ):
         mock_session.return_value.prompt.return_value = "always"
         assert PermissionManager.check_permission("test", "Message") is True
         # Should be cached
@@ -29,7 +35,10 @@ def test_permission_manager_granted_always():
 
 def test_permission_manager_denied():
     PermissionManager.reset()
-    with patch("meto.agent.permissions.PromptSession") as mock_session:
+    with (
+        patch.object(settings, "PERMISSIONS_ENABLED", True),
+        patch("meto.agent.permissions.PromptSession") as mock_session,
+    ):
         mock_session.return_value.prompt.return_value = "no"
         assert PermissionManager.check_permission("test", "Message") is False
 
@@ -42,13 +51,19 @@ def test_permission_manager_global_bypass():
 
 def test_permission_manager_interrupt():
     PermissionManager.reset()
-    with patch("meto.agent.permissions.PromptSession") as mock_session:
+    with (
+        patch.object(settings, "PERMISSIONS_ENABLED", True),
+        patch("meto.agent.permissions.PromptSession") as mock_session,
+    ):
         mock_session.return_value.prompt.side_effect = KeyboardInterrupt
         assert PermissionManager.check_permission("test", "Message") is False
 
 
 def test_permission_manager_os_error():
     PermissionManager.reset()
-    with patch("meto.agent.permissions.PromptSession") as mock_session:
+    with (
+        patch.object(settings, "PERMISSIONS_ENABLED", True),
+        patch("meto.agent.permissions.PromptSession") as mock_session,
+    ):
         mock_session.return_value.prompt.side_effect = OSError
         assert PermissionManager.check_permission("test", "Message") is False
