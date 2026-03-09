@@ -153,7 +153,41 @@ METO_AGENT_FEATURES=agentsmd,todo_manager,subagents,skills
 
 # Security
 METO_PERMISSIONS_ENABLED=true  # Enable permission checks for sensitive operations
+
+# Command History
+METO_HISTORY_ENABLED=true
+METO_HISTORY_FILE=~/.minimeto/history
+METO_HISTORY_MAX_SIZE=10000
 ```
+
+### Command History
+
+The interactive prompt maintains persistent command history:
+
+- **Location**: `~/.minimeto/history`
+- **Navigation**: Up/Down arrows to scroll through history
+- **Search**: Ctrl+R for reverse incremental search
+- **Max size**: 10,000 commands (configurable)
+
+Configuration:
+
+```bash
+# Disable history
+METO_HISTORY_ENABLED=false
+
+# Custom history file location
+METO_HISTORY_FILE=~/.custom_history
+
+# Max history size
+METO_HISTORY_MAX_SIZE=5000
+```
+
+**Sensitive data is automatically excluded** from history:
+
+- API keys and tokens
+- Passwords and secrets
+- Database connection strings
+- Patterns matching `HISTORY_EXCLUDE_PATTERNS`
 
 ## Linting
 

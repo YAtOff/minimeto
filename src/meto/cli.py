@@ -20,6 +20,7 @@ from meto.agent.syntax_expander import SyntaxExpander
 from meto.agent.todo import TodoManager
 from meto.agent.tool_registry import registry
 from meto.conf import settings
+from meto.history import create_history
 
 app = typer.Typer(add_completion=False)
 
@@ -62,7 +63,14 @@ def _run_single_prompt(
 
 def interactive_loop(session: Session) -> None:
     """Run interactive prompt loop with slash command and agent execution."""
-    prompt_session = PromptSession(editing_mode=EditingMode.EMACS)
+    # Create history instance (or None if disabled)
+    history = create_history()
+
+    # Pass history to PromptSession
+    prompt_session = PromptSession(
+        editing_mode=EditingMode.EMACS,
+        history=history,
+    )
     while True:
         try:
             user_input = prompt_session.prompt(">>> ")

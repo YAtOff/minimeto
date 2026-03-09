@@ -43,6 +43,7 @@ class Settings(BaseSettings):
             "gpt-4o-mini": 128000,
             "claude-sonnet-4": 200000,
             "glm-4.7": 200000,
+            "glm-5": 200000,
         },
         description="Context window sizes per model.",
     )
@@ -136,6 +137,43 @@ class Settings(BaseSettings):
         default=15000,
         description="Max characters of history to send for summarization.",
     )
+
+    # --- Command History ---
+
+    HISTORY_FILE: Path = Field(
+        default=Path.home() / ".minimeto" / "history",
+        description="Path to persistent command history file.",
+    )
+
+    HISTORY_MAX_SIZE: int = Field(
+        default=10000,
+        description="Maximum number of commands to retain in history.",
+    )
+
+    HISTORY_EXCLUDE_PATTERNS: list[str] = Field(
+        default=[
+            # API keys and tokens
+            r"(?i)(api[_-]?key|token|secret|password)\s*[=:]\s*\S+",
+            r"sk-[a-zA-Z0-9-]{20,}",  # OpenAI-style keys
+            r"xox[baprs]-[a-zA-Z0-9-]+",  # Slack tokens
+            # Connection strings
+            r"(?i)(postgres|mysql|mongodb)://[^\s]+",
+            # Base64-encoded secrets (heuristic)
+            r"(?i)(secret|token|key)\s*[=:]\s*[A-Za-z0-9+/]{40,}={0,2}",
+        ],
+        description="Regex patterns to exclude from history (sensitive data).",
+    )
+
+    HISTORY_ENABLED: bool = Field(
+        default=True,
+        description="Enable persistent command history.",
+    )
+
+    @field_validator("HISTORY_FILE")
+    @classmethod
+    def ensure_history_dir(cls, v: Path) -> Path:
+        v.parent.mkdir(parents=True, exist_ok=True)
+        return v
 
     # --- Logging ---
 
