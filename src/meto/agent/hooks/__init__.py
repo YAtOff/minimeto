@@ -1,7 +1,8 @@
 # pyright: reportUnusedImport=false
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from meto.agent.context import Context
 from meto.agent.hooks.base import (
     ErrorResult,
     HookResult,
@@ -10,9 +11,6 @@ from meto.agent.hooks.base import (
     PreToolUseHook,
     SuccessResult,
 )
-
-if TYPE_CHECKING:
-    from meto.agent.context import Context
 
 __all__ = [
     "ErrorResult",
@@ -26,7 +24,7 @@ __all__ = [
 ]
 
 
-def pre_tool_use(tool_name: str, arguments: dict[str, Any], context: "Context") -> HookResult:
+def pre_tool_use(tool_name: str, arguments: dict[str, Any], context: Context) -> HookResult:
     """Run all registered pre-tool hooks."""
     for hook_cls in PreToolUseHook.registry:
         hook_instance = hook_cls(tool_name, arguments, context)
@@ -37,7 +35,7 @@ def pre_tool_use(tool_name: str, arguments: dict[str, Any], context: "Context") 
     return SuccessResult()
 
 
-def post_tool_use(tool_name: str, arguments: dict[str, Any], output: str, context: "Context") -> HookResult:
+def post_tool_use(tool_name: str, arguments: dict[str, Any], output: str, context: Context) -> HookResult:
     """Run all registered post-tool hooks."""
     for hook_cls in PostToolUseHook.registry:
         hook_instance = hook_cls(tool_name, arguments, output, context)

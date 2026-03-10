@@ -16,6 +16,7 @@ import logging
 from collections.abc import Generator
 from typing import TYPE_CHECKING, Any, cast
 
+from meto.agent.agent import Agent
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
 from meto.agent.hooks import (
@@ -33,9 +34,6 @@ from meto.agent.tool_runner import (  # pyright: ignore[reportImportCycles]
     run_tool,
 )
 from meto.conf import settings
-
-if TYPE_CHECKING:
-    from meto.agent.agent import Agent
 
 logger = logging.getLogger("agent")
 

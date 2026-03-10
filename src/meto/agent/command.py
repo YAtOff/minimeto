@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import click
 import typer
+from openai import OpenAI
 from rich.console import Console
 from rich.table import Table
 
@@ -17,14 +18,10 @@ from meto.agent.history_export import (
 )
 from meto.agent.loaders.agent_loader import get_agents
 from meto.agent.loaders.skill_loader import get_skill_loader
+from meto.agent.session import Session
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from click import Context
-
-    from meto.agent.session import Session
 
 
 class NewSessionException(Exception):
@@ -35,7 +32,7 @@ class NewSessionException(Exception):
 
 @click.group()
 @click.pass_context
-def chat_commands(ctx: "Context"):
+def chat_commands(ctx: click.Context):
     ctx.ensure_object(dict)
     pass
 
@@ -320,7 +317,6 @@ def _format_history_for_summary(
 
 def _generate_llm_summary(history: Sequence[dict[str, Any]]) -> str | None:
     """Generate an LLM-based semantic summary of the conversation."""
-    from openai import OpenAI
 
     prompt = """Summarize this coding agent session concisely. Focus on:
 1. **Task**: What was the user trying to accomplish?

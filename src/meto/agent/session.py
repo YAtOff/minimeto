@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, override
 
+from meto.agent.exceptions import SessionNotFoundError
 from meto.conf import settings
 
 
@@ -220,7 +221,6 @@ class Session:
         If a compact marker exists in the session file, only messages after
         the last compact marker are loaded. The full history is preserved on disk.
         """
-        from meto.agent.exceptions import SessionNotFoundError
 
         if not re.match(r"^[a-zA-Z0-9_\-]+$", session_id):
             raise ValueError(

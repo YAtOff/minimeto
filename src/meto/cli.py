@@ -13,7 +13,7 @@ from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
 from meto.agent.command import NewSessionException, execute_chat_command
 from meto.agent.context import Context
-from meto.agent.exceptions import AgentInterrupted, MCPInitializationError
+from meto.agent.exceptions import AgentInterrupted, MCPInitializationError, SessionNotFoundError
 from meto.agent.mcp_client import initialize_mcp_registry
 from meto.agent.session import Session
 from meto.agent.syntax_expander import SyntaxExpander
@@ -128,8 +128,6 @@ def run(
 
     if ctx.invoked_subcommand is not None:
         return
-
-    from meto.agent.exceptions import SessionNotFoundError
 
     try:
         session = Session.load(session_id, yolo=yolo) if session_id else Session.new(yolo=yolo)

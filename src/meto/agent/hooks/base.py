@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
-if TYPE_CHECKING:
-    from meto.agent.context import Context
+from meto.agent.context import Context
 
 
 @dataclass(frozen=True)

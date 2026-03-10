@@ -9,10 +9,8 @@ from typing import TYPE_CHECKING
 from prompt_toolkit import PromptSession
 from prompt_toolkit.enums import EditingMode
 
+from meto.agent.session import Session
 from meto.conf import settings
-
-if TYPE_CHECKING:
-    from meto.agent.session import Session
 
 
 class PermissionManager:

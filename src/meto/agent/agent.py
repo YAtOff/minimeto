@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from meto.agent.exceptions import SubagentError
+from meto.agent.exceptions import SkillAgentNotFoundError, SubagentError
 from meto.agent.loaders import get_agents
+from meto.agent.loaders.skill_loader import get_skill_loader
 from meto.agent.tool_registry import registry
 from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
@@ -94,8 +95,6 @@ class Agent:
             name: Name of the agent to create
             skill_name: Optional skill name for skill-local agents
         """
-        from meto.agent.exceptions import SkillAgentNotFoundError
-        from meto.agent.loaders.skill_loader import get_skill_loader
 
         # If skill_name provided, try skill-local agent first
         if skill_name:

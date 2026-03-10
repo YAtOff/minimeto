@@ -1,11 +1,13 @@
+import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from meto.agent.session import Session, SessionHistory, SessionLogger, generate_session_id
 from meto.agent.todo import TodoManager
 
 if TYPE_CHECKING:
-    from meto.agent.session import Session
+    pass
 
 ToolHandler = Callable[[Any, dict[str, Any]], str]
 
@@ -82,8 +84,6 @@ class Context:
         Returns:
             A new Context instance with shared state where appropriate.
         """
-        from meto.agent.session import SessionHistory, SessionLogger, generate_session_id
-        import os
 
         child_id = generate_session_id()
         child_history: list[dict[str, Any]] = []
