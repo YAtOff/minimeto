@@ -36,9 +36,12 @@ def generate_session_id() -> str:
 class SessionLogger:
     """Append-only JSONL logger for chat history persistence."""
 
-    def __init__(self, session_id: str, session_dir: Path = settings.SESSION_DIR) -> None:
+    def __init__(
+        self, session_id: str, session_file: Path | None = None, log_dir: Path | None = None
+    ) -> None:
         self.session_id: str = session_id
-        self.session_file: Path = session_dir / f"session-{self.session_id}.jsonl"
+        self.log_dir = log_dir or (settings.SESSION_DIR / session_id)
+        self.session_file: Path = session_file or (self.log_dir / "log.jsonl")
         self._lock: threading.Lock = threading.Lock()
         self._header_logged: bool = False
 
@@ -226,7 +229,8 @@ class Session:
                 "Only alphanumeric characters, underscores and hyphens are allowed."
             )
 
-        session_file = session_dir / f"session-{session_id}.jsonl"
+        log_dir = session_dir / session_id
+        session_file = log_dir / "log.jsonl"
 
         if not session_file.exists():
             raise SessionNotFoundError(f"Session '{session_id}' not found at {session_file}")
@@ -313,7 +317,7 @@ class Session:
 
         working_dir = Path(info.get("working_dir", os.fspath(Path.cwd())))
         os.chdir(working_dir)
-        session_logger = SessionLogger(session_id)
+        session_logger = SessionLogger(session_id, session_file=session_file, log_dir=log_dir)
         history = SessionHistory(session_logger, head=head, checkpoints=checkpoints)
         return cls(session_id=session_id, working_dir=working_dir, history=history)
 
@@ -326,7 +330,8 @@ class Session:
 
         session_id = generate_session_id()
         working_dir = Path.cwd()
-        session_logger = SessionLogger(session_id)
+        log_dir = settings.SESSION_DIR / session_id
+        session_logger = SessionLogger(session_id, log_dir=log_dir)
         session_logger.log_header(
             {
                 "session_id": session_id,

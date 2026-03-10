@@ -56,7 +56,12 @@ def _run_single_prompt(
     expanded_input, _ = expander.expand(user_input)
     agent = Agent.main()
     history = session.history
-    context = Context(todos=TodoManager(), history=history)
+    context = Context(
+        todos=TodoManager(),
+        history=history,
+        session=session,
+        context_id=session.session_id,
+    )
     for output in run_agent_loop(agent, expanded_input, context):
         print(output, flush=True)
 

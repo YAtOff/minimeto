@@ -38,7 +38,9 @@ from unittest.mock import patch
 
 def test_session_load_malformed_json_logs_warning(tmp_path):
     session_id = "test-session"
-    session_file = tmp_path / f"session-{session_id}.jsonl"
+    session_dir = tmp_path / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    session_file = session_dir / "log.jsonl"
 
     header = {"session_id": session_id, "working_dir": str(tmp_path)}
     user_msg = {
@@ -76,7 +78,9 @@ def test_session_load_malformed_json_logs_warning(tmp_path):
 
 def test_session_checkpoints_and_rewind(tmp_path):
     session_id = "checkpoint-session"
-    session_file = tmp_path / f"session-{session_id}.jsonl"
+    session_dir = tmp_path / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    session_file = session_dir / "log.jsonl"
 
     header = {"session_id": session_id, "working_dir": str(tmp_path)}
     msg1 = {"role": "user", "content": "msg1"}
