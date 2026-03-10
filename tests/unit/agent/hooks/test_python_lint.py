@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from meto.agent.hooks.python_lint import PythonLintHook
 
@@ -10,6 +10,7 @@ def test_python_lint_hook_matches():
         tool_name="write_file",
         arguments={"path": "test.py"},
         output="Successfully wrote to test.py",
+        context=MagicMock(),
     )
     assert hook.matches() is True
 
@@ -18,18 +19,19 @@ def test_python_lint_hook_matches():
         tool_name="write_file",
         arguments={"path": "test.txt"},
         output="Successfully wrote to test.txt",
+        context=MagicMock(),
     )
     assert hook.matches() is False
 
     # Should not match failed tool call
     hook = PythonLintHook(
-        tool_name="write_file", arguments={"path": "test.py"}, output="Error: Failed to write"
+        tool_name="write_file", arguments={"path": "test.py"}, output="Error: Failed to write", context=MagicMock()
     )
     assert hook.matches() is False
 
     # Should not match different tool
     hook = PythonLintHook(
-        tool_name="read_file", arguments={"path": "test.py"}, output="file content"
+        tool_name="read_file", arguments={"path": "test.py"}, output="file content", context=MagicMock()
     )
     assert hook.matches() is False
 
@@ -39,6 +41,7 @@ def test_python_lint_hook_run_success():
         tool_name="write_file",
         arguments={"path": "test.py"},
         output="Successfully wrote to test.py",
+        context=MagicMock(),
     )
 
     with patch("subprocess.run") as mock_run:
@@ -65,6 +68,7 @@ def test_python_lint_hook_run_exception(caplog):
         tool_name="write_file",
         arguments={"path": "test.py"},
         output="Successfully wrote to test.py",
+        context=MagicMock(),
     )
 
     with patch("subprocess.run", side_effect=Exception("Ruff not found")):

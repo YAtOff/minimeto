@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+
+if TYPE_CHECKING:
+    from meto.agent.context import Context
 
 
 @dataclass(frozen=True)
@@ -46,10 +49,12 @@ class PreToolUseHook(ABC):
 
     tool_name: str
     arguments: dict[str, Any]
+    context: "Context"
 
-    def __init__(self, tool_name: str, arguments: dict[str, Any]) -> None:
+    def __init__(self, tool_name: str, arguments: dict[str, Any], context: "Context") -> None:
         self.tool_name = tool_name
         self.arguments = arguments
+        self.context = context
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -80,11 +85,13 @@ class PostToolUseHook(ABC):
     tool_name: str
     arguments: dict[str, Any]
     output: str
+    context: "Context"
 
-    def __init__(self, tool_name: str, arguments: dict[str, Any], output: str) -> None:
+    def __init__(self, tool_name: str, arguments: dict[str, Any], output: str, context: "Context") -> None:
         self.tool_name = tool_name
         self.arguments = arguments
         self.output = output
+        self.context = context
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)

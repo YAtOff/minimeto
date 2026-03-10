@@ -116,6 +116,13 @@ def run(
             help="Resume session by ID (format: timestamp-randomsuffix)",
         ),
     ] = None,
+    yolo: Annotated[
+        bool,
+        typer.Option(
+            "--yolo",
+            help="Enable YOLO mode (skip all permission checks)",
+        ),
+    ] = False,
 ) -> None:
     """Run meto."""
 
@@ -125,10 +132,10 @@ def run(
     from meto.agent.exceptions import SessionNotFoundError
 
     try:
-        session = Session.load(session_id) if session_id else Session.new()
+        session = Session.load(session_id, yolo=yolo) if session_id else Session.new(yolo=yolo)
     except SessionNotFoundError as e:
         print(f"[Warning] {e}. Starting a new session.", file=sys.stderr)
-        session = Session.new()
+        session = Session.new(yolo=yolo)
 
     if one_shot:
         # Determine input source based on precedence rules

@@ -210,18 +210,17 @@ class Session:
     session_id: str
     working_dir: Path
     history: SessionHistory
+    permissions: dict[str, bool]
+    yolo: bool
 
     @classmethod
-    def load(cls, session_id: str, session_dir: Path = settings.SESSION_DIR) -> Session:
+    def load(cls, session_id: str, session_dir: Path = settings.SESSION_DIR, yolo: bool = False) -> Session:
         """Load session by ID, returning Session instance.
 
         If a compact marker exists in the session file, only messages after
         the last compact marker are loaded. The full history is preserved on disk.
         """
         from meto.agent.exceptions import SessionNotFoundError
-        from meto.agent.permissions import PermissionManager
-
-        PermissionManager.reset()
 
         if not re.match(r"^[a-zA-Z0-9_\-]+$", session_id):
             raise ValueError(
@@ -263,6 +262,7 @@ class Session:
                 if i == 0:
                     info = {
                         "working_dir": raw.get("working_dir", os.fspath(Path.cwd())),
+                        "yolo": raw.get("yolo", False),
                     }
                     continue
 
@@ -313,21 +313,18 @@ class Session:
 
         except OSError as e:
             logger.error(f"Failed to load session {session_id}: {e}")
-            return cls.new()
+            return cls.new(yolo=yolo)
 
         working_dir = Path(info.get("working_dir", os.fspath(Path.cwd())))
         os.chdir(working_dir)
         session_logger = SessionLogger(session_id, session_file=session_file, log_dir=log_dir)
         history = SessionHistory(session_logger, head=head, checkpoints=checkpoints)
-        return cls(session_id=session_id, working_dir=working_dir, history=history)
+        final_yolo = yolo or info.get("yolo", False)
+        return cls(session_id=session_id, working_dir=working_dir, history=history, yolo=final_yolo)
 
     @classmethod
-    def new(cls) -> Session:
+    def new(cls, yolo: bool = False) -> Session:
         """Create new session with unique ID."""
-        from meto.agent.permissions import PermissionManager
-
-        PermissionManager.reset()
-
         session_id = generate_session_id()
         working_dir = Path.cwd()
         log_dir = settings.SESSION_DIR / session_id
@@ -336,20 +333,25 @@ class Session:
             {
                 "session_id": session_id,
                 "working_dir": os.fspath(working_dir),
+                "yolo": yolo,
             }
         )
         history = SessionHistory(session_logger, head=None, checkpoints={})
-        return cls(session_id=session_id, working_dir=working_dir, history=history)
+        return cls(session_id=session_id, working_dir=working_dir, history=history, yolo=yolo)
 
     def __init__(
         self,
         session_id: str,
         working_dir: Path,
         history: SessionHistory,
+        permissions: dict[str, bool] | None = None,
+        yolo: bool = False,
     ) -> None:
         self.session_id = session_id
         self.working_dir = working_dir
         self.history = history
+        self.permissions = permissions or {}
+        self.yolo = yolo
 
     def compact(self, summary: str) -> None:
         """Log a compact marker to truncate history on next load.

@@ -1,21 +1,22 @@
+from unittest.mock import MagicMock
 from meto.agent.hooks.security import SafeReadHook
 
 
 def test_safe_read_hook_allowed_file():
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": "src/main.py"})
+    hook = SafeReadHook(tool_name="read_file", arguments={"path": "src/main.py"}, context=MagicMock())
     result = hook.run()
     assert result.success
 
 
 def test_safe_read_hook_forbidden_file():
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": ".env"})
+    hook = SafeReadHook(tool_name="read_file", arguments={"path": ".env"}, context=MagicMock())
     result = hook.run()
     assert not result.success
     assert "security reasons" in result.error
 
 
 def test_safe_read_hook_forbidden_dir():
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": ".git/config"})
+    hook = SafeReadHook(tool_name="read_file", arguments={"path": ".git/config"}, context=MagicMock())
     result = hook.run()
     assert not result.success
     assert "security reasons" in result.error
@@ -36,14 +37,14 @@ def test_safe_read_hook_resolves_symlink(tmp_path):
 
         pytest.skip("Symlinks not supported on this platform")
 
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": str(safe_link)})
+    hook = SafeReadHook(tool_name="read_file", arguments={"path": str(safe_link)}, context=MagicMock())
     result = hook.run()
     assert not result.success
     assert "security reasons" in result.error
 
 
 def test_safe_read_hook_no_path():
-    hook = SafeReadHook(tool_name="read_file", arguments={})
+    hook = SafeReadHook(tool_name="read_file", arguments={}, context=MagicMock())
     result = hook.run()
     assert result.success
 
@@ -52,6 +53,6 @@ def test_safe_read_hook_pattern_match():
     # Test different forbidden patterns
     forbidden_files = [".env.prod", "id_rsa", "config.key", "my.pem"]
     for f in forbidden_files:
-        hook = SafeReadHook(tool_name="read_file", arguments={"path": f})
+        hook = SafeReadHook(tool_name="read_file", arguments={"path": f}, context=MagicMock())
         result = hook.run()
         assert not result.success, f"File {f} should be blocked"

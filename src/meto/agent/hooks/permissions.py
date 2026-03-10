@@ -50,7 +50,7 @@ class PermissionHook(PreToolUseHook, ABC):
         message = self.get_permission_message()
 
         # Check permission via manager
-        if PermissionManager.check_permission(key, message):
+        if PermissionManager.check_permission(key, message, self.context.session):
             return SuccessResult()
 
         # Permission denied
