@@ -77,12 +77,6 @@ class Settings(BaseSettings):
         description="Directory to store session files.",
     )
 
-    @field_validator("SESSION_DIR")
-    @classmethod
-    def ensure_dir_exists(cls, v: Path) -> Path:
-        v.mkdir(parents=True, exist_ok=True)
-        return v
-
     # --- Resources (defaults in package) ---
 
     DEFAULT_RESOURCES_DIR: Path = Field(
@@ -169,12 +163,6 @@ class Settings(BaseSettings):
         description="Enable persistent command history.",
     )
 
-    @field_validator("HISTORY_FILE")
-    @classmethod
-    def ensure_history_dir(cls, v: Path) -> Path:
-        v.parent.mkdir(parents=True, exist_ok=True)
-        return v
-
     # --- Logging ---
 
     LOG_DIR: Path = Field(
@@ -182,11 +170,33 @@ class Settings(BaseSettings):
         description="Directory for agent reasoning trace logs.",
     )
 
-    @field_validator("LOG_DIR")
+    # --- Validators ---
+
+    @field_validator("AGENT_FEATURES")
     @classmethod
-    def ensure_log_dir(cls, v: Path) -> Path:
-        v.mkdir(parents=True, exist_ok=True)
+    def validate_features(cls, v: list[str]) -> list[str]:
+        """Validate that all enabled features are supported."""
+        allowed = {"agentsmd", "subagents", "skills", "todo_manager", "mcp", "rules"}
+        invalid = set(v) - allowed
+        if invalid:
+            raise ValueError(f"Unsupported features: {', '.join(invalid)}")
         return v
+
+    @field_validator("SESSION_DIR", "LOG_DIR", "AGENTS_DIR", "SKILLS_DIR", "RULES_DIR")
+    @classmethod
+    def ensure_dir_exists(cls, v: Path) -> Path:
+        """Ensure the directory exists, expanding user paths."""
+        expanded = v.expanduser()
+        expanded.mkdir(parents=True, exist_ok=True)
+        return expanded
+
+    @field_validator("HISTORY_FILE")
+    @classmethod
+    def ensure_history_dir(cls, v: Path) -> Path:
+        """Ensure the parent directory of the history file exists, expanding user paths."""
+        expanded = v.expanduser()
+        expanded.parent.mkdir(parents=True, exist_ok=True)
+        return expanded
 
 
 # Global settings instance

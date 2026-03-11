@@ -19,7 +19,12 @@ class TodoManager:
     """
 
     def __init__(self) -> None:
-        self.items: list[dict[str, str]] = []
+        self._items: list[dict[str, str]] = []
+
+    @property
+    def items(self) -> tuple[dict[str, str], ...]:
+        """Return the todo list as a read-only tuple."""
+        return tuple(self._items)
 
     def update(self, items: list[dict[str, str]]) -> str:
         """Validate and update the todo list.
@@ -63,7 +68,7 @@ class TodoManager:
                 {
                     "content": content,
                     "status": status,
-                    "activeForm": active_form,
+                    "active_form": active_form,  # Using snake_case for internal consistency
                 }
             )
 
@@ -73,7 +78,7 @@ class TodoManager:
         if in_progress_count > 1:
             raise ValueError("Only one todo can be in_progress at a time")
 
-        self.items = validated
+        self._items = validated
         return self.render()
 
     def render(self) -> str:
@@ -88,47 +93,48 @@ class TodoManager:
 
         This rendered text is what the model sees as the tool result.
         """
-        if not self.items:
+        if not self._items:
             return "No todos."
 
         lines: list[str] = []
-        for item in self.items:
+        for item in self._items:
             if item["status"] == "completed":
                 lines.append(f"[x] {item['content']}")
             elif item["status"] == "in_progress":
-                lines.append(f"[>] {item['content']} <- {item['activeForm']}")
+                # item keys were updated to snake_case in update()
+                lines.append(f"[>] {item['content']} <- {item['active_form']}")
             else:
                 lines.append(f"[ ] {item['content']}")
 
-        completed = sum(1 for t in self.items if t["status"] == "completed")
-        lines.append(f"\n({completed}/{len(self.items)} completed)")
+        completed = sum(1 for t in self._items if t["status"] == "completed")
+        lines.append(f"\n({completed}/{len(self._items)} completed)")
 
         return "\n".join(lines)
 
     def clear(self) -> None:
         """Clear all todos."""
-        self.items.clear()
+        self._items.clear()
 
     def print_rich(self) -> None:
         """Print todo list with rich formatting."""
         console = Console()
 
-        if not self.items:
+        if not self._items:
             console.print("[dim]No todos.[/dim]")
             return
 
-        for item in self.items:
+        for item in self._items:
             if item["status"] == "completed":
                 console.print(f"[bold green][✓][/bold green] {item['content']}")
             elif item["status"] == "in_progress":
                 console.print(
-                    f"[bold yellow][⚙️][/bold yellow] {item['content']} [dim]← {item['activeForm']}[/dim]"
+                    f"[bold yellow][⚙️][/bold yellow] {item['content']} [dim]← {item['active_form']}[/dim]"
                 )
             else:
                 console.print(f"[dim][○] {item['content']}[/dim]")
 
-        completed = sum(1 for t in self.items if t["status"] == "completed")
-        total = len(self.items)
+        completed = sum(1 for t in self._items if t["status"] == "completed")
+        total = len(self._items)
         pct = int(completed / total * 100) if total else 0
 
         console.print()

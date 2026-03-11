@@ -35,7 +35,9 @@ def pre_tool_use(tool_name: str, arguments: dict[str, Any], context: Context) ->
     return SuccessResult()
 
 
-def post_tool_use(tool_name: str, arguments: dict[str, Any], output: str, context: Context) -> HookResult:
+def post_tool_use(
+    tool_name: str, arguments: dict[str, Any], output: str, context: Context
+) -> HookResult:
     """Run all registered post-tool hooks."""
     for hook_cls in PostToolUseHook.registry:
         hook_instance = hook_cls(tool_name, arguments, output, context)

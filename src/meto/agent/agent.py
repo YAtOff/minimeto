@@ -7,6 +7,7 @@ An Agent bundles:
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from meto.agent.exceptions import SkillAgentNotFoundError, SubagentError
@@ -15,6 +16,8 @@ from meto.agent.loaders.skill_loader import get_skill_loader
 from meto.agent.tool_registry import registry
 from meto.agent.tool_schema import TOOLS
 from meto.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_tools_for_agent(allowed_tools: list[str] | str) -> tuple[dict[str, Any], ...]:
@@ -62,13 +65,70 @@ class Agent:
     This is intentionally a lightweight container. Most behavior lives in:
     - :func:`meto.agent.agent_loop.run_agent_loop` (LLM/tool loop)
     - :func:`meto.agent.tool_runner.run_tool` (tool execution)
-    - :mod:`meto.agent.agent_registry` (agent definitions + tool selection)
+    - :mod:`meto.agent.loaders.agent_loader` (agent definitions + tool selection)
     """
 
-    name: str
-    prompt: str
-    tools: tuple[dict[str, Any], ...]
-    max_turns: int
+    _name: str
+    _prompt: str
+    _max_turns: int
+    _tools: tuple[dict[str, Any], ...]
+
+    def __init__(
+        self,
+        name: str,
+        prompt: str,
+        allowed_tools: list[str] | str,
+        max_turns: int,
+    ) -> None:
+        """Create an Agent.
+
+        Args:
+            name: Agent name (e.g. "main", "explore", "plan").
+            prompt: Optional extra per-agent system prompt content.
+            allowed_tools: "*" or a list of tool names.
+            max_turns: Max model/tool iterations per user prompt.
+        """
+        if max_turns <= 0:
+            raise ValueError(f"max_turns must be at least 1, got {max_turns}")
+
+        self._name = name
+        self._prompt = prompt
+        self._max_turns = max_turns
+        self._tools = ()  # Explicitly initialize for basedpyright
+
+        # Use the setter to trigger validation
+        self.tools = get_tools_for_agent(allowed_tools)
+
+    @property
+    def name(self) -> str:
+        """Return the agent name."""
+        return self._name
+
+    @property
+    def prompt(self) -> str:
+        """Return the agent-specific system prompt content."""
+        return self._prompt
+
+    @property
+    def max_turns(self) -> int:
+        """Return the maximum number of turns for this agent."""
+        return self._max_turns
+
+    @property
+    def tools(self) -> tuple[dict[str, Any], ...]:
+        """Return the list of tool schemas allowed for this agent."""
+        return self._tools
+
+    @tools.setter
+    def tools(self, value: tuple[dict[str, Any], ...]) -> None:
+        """Update the tool schemas, ensuring unique names."""
+        tool_names = [tool["function"]["name"] for tool in value]
+        if len(tool_names) != len(set(tool_names)):
+            duplicates = [name for name in set(tool_names) if tool_names.count(name) > 1]
+            raise ValueError(
+                f"Tool names must be unique. Duplicates found: {', '.join(duplicates)}"
+            )
+        self._tools = value
 
     @classmethod
     def main(cls) -> Agent:
@@ -107,8 +167,12 @@ class Agent:
                     allowed_tools=agent_config["tools"],
                     max_turns=settings.SUBAGENT_MAX_TURNS,
                 )
-            except SkillAgentNotFoundError:
+            except SkillAgentNotFoundError as e:
                 # Fall through to global agents
+                logger.debug(
+                    f"Skill-local agent '{name}' not found in skill '{skill_name}': {e}. "
+                    "Falling back to global agents."
+                )
                 pass
 
         # Fall back to global agents
@@ -145,30 +209,6 @@ class Agent:
             allowed_tools=allowed_tools,
             max_turns=settings.SUBAGENT_MAX_TURNS,
         )
-
-    def __init__(
-        self,
-        name: str,
-        prompt: str,
-        allowed_tools: list[str] | str,
-        max_turns: int,
-    ) -> None:
-        """Create an Agent.
-
-        Args:
-            name: Agent name (e.g. "main", "explore", "plan").
-            prompt: Optional extra per-agent system prompt content.
-            allowed_tools: "*" or a list of tool names.
-            max_turns: Max model/tool iterations per user prompt.
-        """
-        if max_turns <= 0:
-            raise ValueError(f"max_turns must be at least 1, got {max_turns}")
-
-        self.name = name
-        self.prompt = prompt
-        self.max_turns = max_turns
-
-        self.tools = get_tools_for_agent(allowed_tools)
 
     @property
     def tool_names(self) -> list[str]:

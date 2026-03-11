@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+from typing import Any, ClassVar, Protocol
 
 from meto.agent.context import Context
 
@@ -14,10 +14,16 @@ class HookResult:
     injected_content: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.success and not self.error:
-            raise ValueError("HookResult with success=False must have error message")
-        if self.success and self.error:
-            raise ValueError("HookResult with success=True should not have error")
+        if not self.success:
+            if not self.error:
+                raise ValueError("HookResult with success=False must have error message")
+            if self.injected_content:
+                raise ValueError("HookResult with success=False should not have injected_content")
+        else:
+            if self.error is not None:
+                raise ValueError("HookResult with success=True should not have error")
+            if self.injected_content == "":
+                raise ValueError("HookResult with injected_content must have non-empty string")
 
 
 def SuccessResult() -> HookResult:
@@ -41,7 +47,16 @@ class Hook(Protocol):
 
 
 class PreToolUseHook(ABC):
-    """Base class for hooks that run before a tool is executed."""
+    """Base class for hooks that run before a tool is executed.
+
+    Auto-registration:
+        Subclasses are automatically registered in PreToolUseHook.registry
+        via __init_subclass__, unless they introduce new abstract methods.
+        Set matched_tools class variable to filter which tools trigger the hook.
+
+    Subclasses must implement:
+        run(): Execute the hook logic and return a HookResult
+    """
 
     registry: ClassVar[list[type["PreToolUseHook"]]] = []
     matched_tools: list[str] | None = None
@@ -86,7 +101,9 @@ class PostToolUseHook(ABC):
     output: str
     context: "Context"
 
-    def __init__(self, tool_name: str, arguments: dict[str, Any], output: str, context: "Context") -> None:
+    def __init__(
+        self, tool_name: str, arguments: dict[str, Any], output: str, context: "Context"
+    ) -> None:
         self.tool_name = tool_name
         self.arguments = arguments
         self.output = output
