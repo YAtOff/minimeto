@@ -274,7 +274,7 @@ class TestLoadAgentTool:
 
         # Patch get_skill_loader to return our test loader
         # get_skill_loader() returns a SkillLoader, so we return skill_loader directly
-        with patch("meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader):
+        with patch("meto.agent.agent.get_skill_loader", return_value=skill_loader):
             # Need to patch at call site
             with patch("meto.agent.tools.skill_tools.get_skill_loader", return_value=skill_loader):
                 result = _load_agent(context, "reviewer")
@@ -286,7 +286,7 @@ class TestLoadAgentTool:
         context = Context(todos=TodoManager(), history=[])
         context.active_skill = "test_skill"
 
-        with patch("meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader):
+        with patch("meto.agent.agent.get_skill_loader", return_value=skill_loader):
             with patch("meto.agent.tools.skill_tools.get_skill_loader", return_value=skill_loader):
                 result = _load_agent(context, "nonexistent")
                 assert "Error:" in result
@@ -298,7 +298,7 @@ class TestAgentSubagentWithSkill:
 
     def test_subagent_with_skill_name(self, skill_loader: SkillLoader) -> None:
         """Test creating subagent from skill-local agent."""
-        with patch("meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader):
+        with patch("meto.agent.agent.get_skill_loader", return_value=skill_loader):
             agent = Agent.subagent("reviewer", skill_name="test_skill")
             assert agent.name == "reviewer"
             assert "This agent reviews code" in agent.prompt
@@ -322,9 +322,7 @@ Global agent content.""",
         )
 
         try:
-            with patch(
-                "meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader
-            ):
+            with patch("meto.agent.agent.get_skill_loader", return_value=skill_loader):
                 agent = Agent.subagent("global_test", skill_name="test_skill")
                 assert agent.name == "global_test"
         finally:
@@ -333,7 +331,7 @@ Global agent content.""",
 
     def test_subagent_skill_not_found_falls_back(self, skill_loader: SkillLoader) -> None:
         """Test that subagent falls back to global when skill doesn't have the agent."""
-        with patch("meto.agent.loaders.skill_loader.get_skill_loader", return_value=skill_loader):
+        with patch("meto.agent.agent.get_skill_loader", return_value=skill_loader):
             # This should fall back to global agents
             # If global_test doesn't exist, it will raise SubagentError
             try:

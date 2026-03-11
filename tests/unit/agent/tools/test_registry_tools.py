@@ -9,7 +9,9 @@ from meto.agent.tools.registry_tools import handle_search_available_tools, searc
 @pytest.fixture
 def mock_context():
     ctx = MagicMock(spec=Context)
+    # Return a tuple as the property does
     ctx.pending_tools = []
+    # Use a real list for storage in the mock if needed, but here we just need to track calls
     return ctx
 
 
@@ -25,8 +27,10 @@ def test_search_available_tools_found(mock_context):
 
         result = search_available_tools(mock_context, "test")
         assert "test_tool: A test tool" in result
-        assert len(mock_context.pending_tools) == 1
-        assert mock_context.pending_tools[0].schema == mock_tool.schema
+        # Check that add_pending_tool was called
+        mock_context.add_pending_tool.assert_called_once()
+        added_tool = mock_context.add_pending_tool.call_args[0][0]
+        assert added_tool.schema == mock_tool.schema
 
 
 def test_search_available_tools_not_found(mock_context):

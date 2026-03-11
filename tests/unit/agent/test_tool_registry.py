@@ -1,4 +1,5 @@
 import logging
+from typing import Any, cast
 
 import pytest
 
@@ -22,6 +23,15 @@ def test_tool_registration_validation():
     # Empty name
     with pytest.raises(ValueError, match="Tool name cannot be empty"):
         ToolRegistration(name="", schema=schema, description="test", handler=handler)
+
+    # Non-callable handler
+    with pytest.raises(ValueError, match="Handler must be callable"):
+        ToolRegistration(
+            name="right_name",
+            schema=schema,
+            description="test",
+            handler=cast(Any, "not a callable"),
+        )
 
 
 def test_tool_registry_no_overwrite_by_default(caplog):

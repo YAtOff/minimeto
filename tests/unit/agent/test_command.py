@@ -1,9 +1,14 @@
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer import Exit
 
-from meto.agent.command import NewSessionException, execute_chat_command
+from meto.agent.command import (
+    NewSessionException,
+    _summarize_tool_args,
+    execute_chat_command,
+)
 
 
 def test_execute_chat_command_invalid():
@@ -76,7 +81,7 @@ def test_compact_llm_failure_notification(capsys):
     # History long enough to trigger LLM summary
     session.history = [{"role": "user", "content": "Hello world" * 20}]
 
-    with patch("openai.OpenAI") as mock_openai:
+    with patch("meto.agent.command.OpenAI") as mock_openai:
         # Mocking OpenAI to raise an exception
         mock_openai.return_value.chat.completions.create.side_effect = Exception("API Error")
 
@@ -98,7 +103,7 @@ def test_compact_llm_success_no_notification(capsys):
     # History long enough to trigger LLM summary
     session.history = [{"role": "user", "content": "Hello world" * 20}]
 
-    with patch("openai.OpenAI") as mock_openai:
+    with patch("meto.agent.command.OpenAI") as mock_openai:
         # Mocking OpenAI to return a successful summary
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "This is a successful summary."
@@ -112,3 +117,31 @@ def test_compact_llm_success_no_notification(capsys):
         assert "AI summarization failed" not in captured.out
         assert "AI summarization failed" not in captured.err
         assert "This is a successful summary." in captured.out
+
+
+def test_summarize_tool_args_invalid_json(caplog):
+    invalid_json = "{'key': 'value'}"  # Invalid JSON (single quotes)
+    caplog.set_level(logging.DEBUG)
+
+    result = _summarize_tool_args(invalid_json)
+
+    assert result == invalid_json  # Should return truncated (or full if short) raw string
+    assert "Failed to parse tool arguments as JSON" in caplog.text
+    assert invalid_json in caplog.text
+
+
+def test_summarize_tool_args_valid_json():
+    valid_json = '{"key": "value", "another": 123}'
+    result = _summarize_tool_args(valid_json)
+    assert "key=value" in result
+    assert "another=123" in result
+
+
+def test_summarize_tool_args_empty():
+    result = _summarize_tool_args("")
+    assert result == ""
+
+
+def test_summarize_tool_args_none():
+    result = _summarize_tool_args(None)
+    assert result == ""

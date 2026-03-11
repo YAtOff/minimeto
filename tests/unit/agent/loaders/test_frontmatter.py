@@ -56,7 +56,7 @@ def test_parse_malformed_yaml():
 invalid: : yaml
 ---
 Body."""
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(ValueError, match="Invalid YAML frontmatter: Line 1, column 10"):
         parse_yaml_frontmatter(content)
 
 

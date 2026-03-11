@@ -1,9 +1,12 @@
 from unittest.mock import MagicMock
+
 from meto.agent.hooks.security import SafeReadHook
 
 
 def test_safe_read_hook_allowed_file():
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": "src/main.py"}, context=MagicMock())
+    hook = SafeReadHook(
+        tool_name="read_file", arguments={"path": "src/main.py"}, context=MagicMock()
+    )
     result = hook.run()
     assert result.success
 
@@ -16,7 +19,9 @@ def test_safe_read_hook_forbidden_file():
 
 
 def test_safe_read_hook_forbidden_dir():
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": ".git/config"}, context=MagicMock())
+    hook = SafeReadHook(
+        tool_name="read_file", arguments={"path": ".git/config"}, context=MagicMock()
+    )
     result = hook.run()
     assert not result.success
     assert "security reasons" in result.error
@@ -37,7 +42,9 @@ def test_safe_read_hook_resolves_symlink(tmp_path):
 
         pytest.skip("Symlinks not supported on this platform")
 
-    hook = SafeReadHook(tool_name="read_file", arguments={"path": str(safe_link)}, context=MagicMock())
+    hook = SafeReadHook(
+        tool_name="read_file", arguments={"path": str(safe_link)}, context=MagicMock()
+    )
     result = hook.run()
     assert not result.success
     assert "security reasons" in result.error

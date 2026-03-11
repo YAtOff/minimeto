@@ -77,6 +77,8 @@ def test_permission_manager_os_error():
     with (
         patch.object(settings, "PERMISSIONS_ENABLED", True),
         patch("meto.agent.permissions.PromptSession") as mock_prompt_session,
+        patch("meto.agent.permissions.logger") as mock_logger,
     ):
-        mock_prompt_session.return_value.prompt.side_effect = OSError
+        mock_prompt_session.return_value.prompt.side_effect = OSError("Input failure")
         assert PermissionManager.check_permission("test", "Message", session) is False
+        mock_logger.warning.assert_called_once_with("Failed to get permission input: Input failure")

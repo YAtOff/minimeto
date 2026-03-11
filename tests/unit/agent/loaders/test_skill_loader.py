@@ -74,3 +74,22 @@ def test_get_skill_content_catches_json_error(tmp_path):
     with patch.object(SkillLoader, "parse_resource_file", side_effect=json_err):
         with pytest.raises(ValueError, match="Failed to load skill 'test_skill'"):
             loader.get_skill_content("test_skill")
+
+
+def test_skill_discovery_reports_errors(tmp_path, caplog):
+    # Setup: Create a bad skill directory
+    bad_skill_dir = tmp_path / "bad_skill"
+    bad_skill_dir.mkdir()
+    bad_skill_file = bad_skill_dir / "SKILL.md"
+    # Invalid YAML
+    bad_skill_file.write_text("---\ndescription: [unclosed\n---\nBody")
+
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        loader = SkillLoader(tmp_path)
+
+    # Verify summary warning is logged
+    assert "Failed to parse 1 resource files during discovery" in caplog.text
+    assert str(bad_skill_file) in caplog.text
+    assert "bad_skill" not in loader.list_skills()

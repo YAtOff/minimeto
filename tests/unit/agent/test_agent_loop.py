@@ -1,10 +1,11 @@
 from unittest.mock import MagicMock, patch
 
+import openai
 import pytest
 
 from meto.agent.agent_loop import run_agent_loop
-from meto.agent.context import Context
-from meto.agent.exceptions import MaxStepsExceededError
+from meto.agent.context import Context, PendingTool
+from meto.agent.exceptions import LLMError, MaxStepsExceededError
 from meto.agent.hooks import ErrorResult, InjectedResult, SuccessResult
 from meto.agent.todo import TodoManager
 
@@ -229,10 +230,10 @@ def test_run_agent_loop_pending_tools():
     context = Context(todos=TodoManager(), history=[])
 
     # Simulate a tool adding a pending tool
-    pending_tool = MagicMock()
+    pending_tool = MagicMock(spec=PendingTool)
     pending_tool.schema = {"function": {"name": "new_tool"}}
     pending_tool.handler = MagicMock()
-    context.pending_tools.append(pending_tool)
+    context.add_pending_tool(pending_tool)
 
     mock_client = MagicMock()
 
@@ -385,3 +386,31 @@ def test_run_agent_loop_non_dict_arguments_reported():
         assert len(tool_results) == 1
         assert tool_results[0]["tool_call_id"] == "call_456"
         assert "Error: Tool arguments must be a dictionary" in tool_results[0]["content"]
+
+
+def test_run_agent_loop_llm_error():
+    agent = MagicMock()
+    agent.max_turns = 10
+    agent.tools = []
+    agent.prompt = "test prompt"
+
+    context = Context(todos=TodoManager(), history=[])
+    mock_client = MagicMock()
+
+    # Mock an authentication error
+    mock_client.chat.completions.create.side_effect = openai.AuthenticationError(
+        message="Invalid API Key", response=MagicMock(), body={}
+    )
+
+    with (
+        patch("meto.agent.agent_loop.get_client", return_value=mock_client),
+        patch("meto.agent.agent_loop.build_system_prompt", return_value="System prompt"),
+        patch("meto.agent.agent_loop.ReasoningLogger"),
+        patch("meto.agent.agent_loop.settings") as mock_settings,
+    ):
+        mock_settings.DEFAULT_MODEL = "gpt-4"
+        with pytest.raises(LLMError) as excinfo:
+            list(run_agent_loop(agent, "User prompt", context))
+
+        assert "LLM authentication failed" in str(excinfo.value)
+        assert "Check your METO_LLM_API_KEY" in str(excinfo.value)
