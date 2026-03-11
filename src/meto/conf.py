@@ -170,6 +170,32 @@ class Settings(BaseSettings):
         description="Directory for agent reasoning trace logs.",
     )
 
+    # --- Diff Display ---
+
+    DIFF_ENABLED: bool = Field(
+        default=True,
+        description="Enable unified diff output when creating or updating files. "
+        "Provides visual feedback of changes in the agent's response.",
+    )
+
+    DIFF_MAX_LINES: int = Field(
+        default=100,
+        description="Maximum number of lines to display in a single diff. "
+        "Diffs exceeding this limit will be truncated to prevent context overflow.",
+    )
+
+    DIFF_CONTEXT_LINES: int = Field(
+        default=3,
+        description="Number of context lines to show around each change in a unified diff. "
+        "Helps understand the location of changes within the file.",
+    )
+
+    DIFF_MAX_FILE_SIZE: int = Field(
+        default=100_000,
+        description="Maximum file size in bytes for which to generate a diff. "
+        "For files larger than this, only a summary (size change) is shown to avoid performance issues.",
+    )
+
     # --- Validators ---
 
     @field_validator("AGENT_FEATURES")

@@ -73,7 +73,7 @@ def test_write_file_success(tmp_path, mock_context):
     content = "new content"
 
     result = write_file(mock_context, str(file_path), content)
-    assert "Successfully wrote" in result
+    assert "Created" in result
     assert file_path.read_text() == content
 
 
@@ -227,3 +227,323 @@ def test_insert_in_file_unexpected_error_bubbles_up(tmp_path, mock_context):
     with patch.object(Path, "read_text", side_effect=NameError("bug")):
         with pytest.raises(NameError):
             insert_in_file(mock_context, str(test_file), 1, "new")
+
+
+# --- Diff functionality tests ---
+
+
+class TestWriteFileDiff:
+    """Tests for write_file diff output."""
+
+    def test_create_new_file_shows_additions(self, tmp_path, mock_context):
+        """Test that new file creation shows all lines as additions."""
+        file_path = tmp_path / "new.txt"
+        result = write_file(mock_context, str(file_path), "line1\nline2\n")
+
+        assert "Created" in result
+        assert "+line1" in result
+        assert "+line2" in result
+        assert "--- /dev/null" in result
+        assert "+++ b/new.txt" in result
+        assert file_path.exists()
+
+    def test_modify_existing_file_shows_diff(self, tmp_path, mock_context):
+        """Test that modifying a file shows unified diff."""
+        file_path = tmp_path / "existing.txt"
+        file_path.write_text("old line\nunchanged\n")
+
+        result = write_file(mock_context, str(file_path), "new line\nunchanged\n")
+
+        assert "Updated" in result
+        assert "-old line" in result
+        assert "+new line" in result
+        assert "--- a/existing.txt" in result
+        assert "+++ b/existing.txt" in result
+
+    def test_identical_content_shows_no_changes(self, tmp_path, mock_context):
+        """Test that writing identical content shows 'No changes' message."""
+        file_path = tmp_path / "same.txt"
+        file_path.write_text("same content\n")
+
+        result = write_file(mock_context, str(file_path), "same content\n")
+
+        assert "No changes" in result
+        assert "identical" in result.lower()
+
+    def test_empty_file_creation(self, tmp_path, mock_context):
+        """Test that creating empty file works correctly."""
+        file_path = tmp_path / "empty.txt"
+        result = write_file(mock_context, str(file_path), "")
+
+        assert "Created" in result
+        assert file_path.exists()
+        assert file_path.read_text() == ""
+
+    def test_empty_to_content_shows_additions(self, tmp_path, mock_context):
+        """Test that going from empty to content shows additions."""
+        file_path = tmp_path / "was_empty.txt"
+        file_path.write_text("")
+
+        result = write_file(mock_context, str(file_path), "new content\n")
+
+        assert "Updated" in result
+        assert "+new content" in result
+
+
+class TestBinaryDetection:
+    """Tests for binary file detection."""
+
+    def test_detects_null_bytes_as_binary(self, tmp_path, mock_context):
+        """Test that files with null bytes are treated as binary."""
+        from meto.agent.tools.file_tools import is_binary_content
+
+        assert is_binary_content(b"\x00\x01\x02") is True
+
+    def test_detects_text_as_non_binary(self, tmp_path, mock_context):
+        """Test that text files are not treated as binary."""
+        from meto.agent.tools.file_tools import is_binary_content
+
+        assert is_binary_content(b"Hello, world!\n") is False
+
+    def test_binary_file_shows_size_change(self, tmp_path, mock_context):
+        """Test that binary files show size change instead of diff."""
+        file_path = tmp_path / "binary.bin"
+        file_path.write_bytes(b"\x00\x01\x02\x03\x04\x05")
+
+        result = write_file(mock_context, str(file_path), "text content")
+
+        # Should show binary file handling
+        assert "Updated binary file" in result
+        assert "→" in result
+        assert "---" not in result
+        assert "+++" not in result
+
+
+class TestDiffGeneration:
+    """Tests for generate_unified_diff helper."""
+
+    def test_new_file_diff_format(self, tmp_path):
+        """Test diff format for new files."""
+        from meto.agent.tools.file_tools import generate_unified_diff
+
+        diff = generate_unified_diff(None, "line1\nline2\n", Path("test.txt"))
+
+        assert "--- /dev/null" in diff
+        assert "+++ b/test.txt" in diff
+        assert "+line1" in diff
+        assert "+line2" in diff
+
+    def test_modified_file_diff_format(self, tmp_path):
+        """Test diff format for modified files."""
+        from meto.agent.tools.file_tools import generate_unified_diff
+
+        old = "line1\nline2\nline3\n"
+        new = "line1\nmodified\nline3\n"
+        diff = generate_unified_diff(old, new, Path("test.txt"))
+
+        assert "--- a/test.txt" in diff
+        assert "+++ b/test.txt" in diff
+        assert "-line2" in diff
+        assert "+modified" in diff
+
+    def test_diff_truncation(self, tmp_path):
+        """Test that large diffs are truncated."""
+        from meto.agent.tools.file_tools import generate_unified_diff
+
+        # Create content with many lines
+        large_content = "\n".join([f"line {i}" for i in range(200)])
+        diff = generate_unified_diff(None, large_content, Path("test.txt"), max_lines=50)
+
+        # Should indicate truncation
+        assert "more lines" in diff.lower() or "truncated" in diff.lower()
+
+    def test_generate_diff_custom_context_lines(self):
+        """Test that custom context_lines parameter affects diff output."""
+        from meto.agent.tools.file_tools import generate_unified_diff
+
+        old = "1\n2\n3\n4\n5\n6\n"
+        new = "1\n2\nCHANGED\n4\n5\n6\n"
+        # With 1 context line, we should see 2 and 4 but not 1 or 5
+        diff = generate_unified_diff(old, new, Path("test.txt"), context_lines=1)
+
+        assert " 2" in diff
+        assert " 4" in diff
+        assert " 1" not in diff
+        assert " 5" not in diff
+
+
+class TestWriteFileErrors:
+    """Tests for write_file error handling."""
+
+    def test_large_file_diff_suppression(self, tmp_path, mock_context):
+        """Test that files exceeding DIFF_MAX_FILE_SIZE show summary instead of diff."""
+        from meto.conf import settings
+
+        file_path = tmp_path / "large.txt"
+        large_content = "x" * (settings.DIFF_MAX_FILE_SIZE + 1000)
+        file_path.write_text(large_content)
+
+        result = write_file(mock_context, str(file_path), "modified " + large_content)
+
+        assert "Diff suppressed for large files" in result
+        assert "Updated large file" in result
+        assert "---" not in result
+        assert "+++" not in result
+
+    def test_write_file_unicode_decode_error_on_existing(self, tmp_path, mock_context):
+        """Test that UnicodeDecodeError when reading existing file is handled."""
+        file_path = tmp_path / "test.txt"
+        file_path.write_bytes(b"\xff\xfe")  # Invalid UTF-8
+
+        result = write_file(mock_context, str(file_path), "new content")
+
+        assert "Error [file_read_error]" in result
+        assert "Cannot read existing file" in result
+        assert file_path.read_bytes() == b"\xff\xfe"  # File shouldn't be modified
+
+    def test_write_file_path_resolution_error(self, mock_context):
+        """Test that OSError during path resolution is handled."""
+        with patch.object(Path, "resolve", side_effect=OSError("Invalid path")):
+            result = write_file(mock_context, "/invalid/path", "content")
+
+        assert "Error [file_path_resolution_error]" in result
+        assert "Error resolving path" in result
+
+    def test_write_file_is_directory_error(self, tmp_path, mock_context):
+        """Test that writing to directory returns clear error."""
+        dir_path = tmp_path / "directory"
+        dir_path.mkdir()
+
+        result = write_file(mock_context, str(dir_path), "content")
+
+        assert "Error [file_write_is_directory]" in result
+        assert "Path is a directory" in result
+
+    def test_write_file_permission_error(self, tmp_path, mock_context):
+        """Test that PermissionError during write is handled."""
+        file_path = tmp_path / "protected.txt"
+        with patch.object(Path, "write_text", side_effect=PermissionError("Permission denied")):
+            result = write_file(mock_context, str(file_path), "content")
+
+        assert "Error [file_write_permission_denied]" in result
+        assert "Permission denied" in result
+
+    def test_write_file_os_error(self, tmp_path, mock_context):
+        """Test that general OSError during write is handled."""
+        file_path = tmp_path / "fail.txt"
+        with patch.object(Path, "write_text", side_effect=OSError("Disk full")):
+            result = write_file(mock_context, str(file_path), "content")
+
+        assert "Error [file_write_os_error]" in result
+        assert "Disk full" in result
+
+    def test_write_file_diff_disabled(self, tmp_path, mock_context):
+        """Test that diff is suppressed when DIFF_ENABLED=False."""
+        from meto.conf import settings
+
+        file_path = tmp_path / "test.txt"
+        file_path.write_text("old")
+
+        with patch.object(settings, "DIFF_ENABLED", False):
+            result = write_file(mock_context, str(file_path), "new")
+
+        assert "---" not in result
+        assert "+++" not in result
+        assert "Updated" in result
+
+    def test_write_file_stat_error_on_binary(self, tmp_path, mock_context):
+        """Test that OSError during stat of binary file is handled."""
+        file_path = tmp_path / "binary.bin"
+        file_path.write_bytes(b"\x00\x01\x02")
+
+        # We need to ensure .exists() works but .stat() fails later
+        orig_stat = Path.stat
+
+        def side_effect(self_path, *args, **kwargs):
+            if str(self_path).endswith("binary.bin") and not any(args) and not kwargs:
+                # This is roughly how stat() is called by exists() on some versions,
+                # but we want to fail specifically the one in write_file.
+                # Actually, write_file calls file_path.stat().st_size.
+                # Let's just mock the return of stat() to raise on a specific condition.
+                raise OSError("Stat failed")
+            return orig_stat(self_path, *args, **kwargs)
+
+        with patch.object(Path, "stat", side_effect=OSError("Stat failed")):
+            # exists() will now fail too, which should be caught as FILE_READ_ERROR
+            result = write_file(mock_context, str(file_path), "new content")
+
+        assert "Error [file_read_error]" in result
+        assert "Error accessing file" in result
+
+    def test_write_file_stat_error_in_binary_block(self, tmp_path, mock_context):
+        """Test that OSError during stat within the binary handler block is caught."""
+        file_path = tmp_path / "binary.bin"
+        file_path.write_bytes(b"\x00\x01\x02")
+
+        # Mock is_binary_content to True
+        with patch("meto.agent.tools.file_tools.is_binary_content", return_value=True):
+            # Mock stat only for the call inside the binary block
+            # This is tricky with Path.stat. Let's patch it specifically where it's used if possible,
+            # but Path is used via 'file_path'.
+            # Alternative: patch Path.stat but let it succeed for exists()
+            real_stat = Path.stat
+            call_count = 0
+
+            def stat_side_effect(self, *args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count > 1:  # Let exists() (which uses stat) succeed
+                    raise OSError("Stat failed")
+                return real_stat(self, *args, **kwargs)
+
+            with patch.object(Path, "stat", autospec=True, side_effect=stat_side_effect):
+                result = write_file(mock_context, str(file_path), "new content")
+
+        assert "Error [file_stat_error]" in result
+        assert "Cannot access file" in result
+
+
+class TestBinaryDetectionExtra:
+    """Extra tests for binary detection edge cases."""
+
+    def test_is_binary_empty_bytes(self):
+        from meto.agent.tools.file_tools import is_binary_content
+
+        assert is_binary_content(b"") is False
+
+    def test_is_binary_mixed_content(self):
+        from meto.agent.tools.file_tools import is_binary_content
+
+        # Mostly text but with some binary-ish bytes
+        content = b"Some text\x01\x02\x03 and more text"
+        # 3 non-text bytes in 23 total bytes = 13% < 30%
+        assert is_binary_content(content) is False
+
+        # Mostly binary
+        content = b"text" + b"\x01\x02\x03\x04\x05\x06\x07\x08"
+        # 8 non-text bytes in 12 total bytes = 66% > 30%
+        assert is_binary_content(content) is True
+
+    def test_is_binary_large_binary(self):
+        from meto.agent.tools.file_tools import is_binary_content
+
+        content = b"\x01" * 10000
+        assert is_binary_content(content) is True
+
+    def test_is_binary_error_handling(self):
+        from meto.agent.tools.file_tools import is_binary_content
+
+        # Should return True (fail-safe binary) on error
+        assert is_binary_content(None) is True  # type: ignore
+
+    def test_write_empty_binary_file_handling(self, tmp_path, mock_context):
+        """Test handling of existing empty binary file."""
+        file_path = tmp_path / "empty.bin"
+        file_path.write_bytes(b"")
+
+        # Mock is_binary_content to return True for this test
+        with patch("meto.agent.tools.file_tools.is_binary_content", return_value=True):
+            result = write_file(mock_context, str(file_path), "new")
+
+        assert "Updated binary file" in result
+        assert "0.0 B → New: 3.0 B" in result

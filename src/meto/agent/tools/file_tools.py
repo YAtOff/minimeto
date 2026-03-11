@@ -1,5 +1,6 @@
 """File and directory operations."""
 
+import difflib
 import logging
 import os
 import shutil
@@ -13,6 +14,116 @@ from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
+
+# --- Error IDs ---
+FILE_PATH_RESOLUTION_ERROR = "file_path_resolution_error"
+FILE_READ_ERROR = "file_read_error"
+FILE_WRITE_PERMISSION_DENIED = "file_write_permission_denied"
+FILE_WRITE_IS_DIRECTORY = "file_write_is_directory"
+FILE_WRITE_OS_ERROR = "file_write_os_error"
+FILE_BINARY_READ_ERROR = "file_binary_read_error"
+FILE_STAT_ERROR = "file_stat_error"
+
+
+# --- Diff helpers ---
+
+
+def is_binary_content(content: bytes) -> bool:
+    """Check if content appears to be binary (non-text).
+
+    The algorithm uses two heuristics:
+    1. Null byte detection: If a null byte (\\x00) is found in the first 8KB.
+    2. Non-printable ratio: If more than 30% of characters in the first 8KB are non-text.
+
+    Args:
+        content: Raw bytes to check
+
+    Returns:
+        True if content appears to be binary, False if text-like
+    """
+    try:
+        # Check for null bytes (common in binary files)
+        if b"\x00" in content[:8192]:
+            return True
+
+        # Check for high ratio of non-printable characters
+        text_chars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)))
+        sample = content[:8192]
+        if not sample:
+            return False
+
+        non_text = sum(1 for byte in sample if byte not in text_chars)
+
+        return non_text / len(sample) > 0.30
+    except (TypeError, AttributeError, MemoryError) as ex:
+        logger.warning(f"Error detecting binary content, treating as binary: {ex}")
+        return True  # Fail safely
+
+
+def generate_unified_diff(
+    old_content: str | None,
+    new_content: str,
+    filepath: Path,
+    max_lines: int | None = None,
+    context_lines: int | None = None,
+) -> str:
+    """Generate a unified diff between old and new content.
+
+    Args:
+        old_content: Original content (None for new files)
+        new_content: New content to write
+        filepath: Path to the file
+        max_lines: Maximum diff lines to show. Defaults to settings.DIFF_MAX_LINES if None.
+        context_lines: Context lines around changes. Defaults to settings.DIFF_CONTEXT_LINES if None.
+
+    Returns:
+        Formatted unified diff string
+    """
+    if max_lines is None:
+        max_lines = settings.DIFF_MAX_LINES
+    if context_lines is None:
+        context_lines = settings.DIFF_CONTEXT_LINES
+
+    filename = filepath.name
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Handle new file case
+    # We manually construct the diff for new files to ensure a clean "+line" format
+    # instead of the more complex diff format for an empty source.
+    if old_content is None:
+        lines = new_content.splitlines(keepends=True)
+        header = f"--- /dev/null\t{timestamp}\n"
+        header += f"+++ b/{filename}\t{timestamp}\n"
+        diff_lines = [f"+{line}" for line in lines[:max_lines]]
+        if len(lines) > max_lines:
+            diff_lines.append(f"... ({len(lines) - max_lines} more lines)\n")
+        return header + "".join(diff_lines)
+
+    # Generate unified diff for existing file
+    old_lines = old_content.splitlines(keepends=True)
+    new_lines = new_content.splitlines(keepends=True)
+
+    diff = difflib.unified_diff(
+        old_lines,
+        new_lines,
+        fromfile=f"a/{filename}",
+        tofile=f"b/{filename}",
+        lineterm="",
+        n=context_lines,
+    )
+
+    diff_text = "".join(diff)
+
+    # Truncate if too large
+    diff_lines_list = diff_text.splitlines(keepends=True)
+    if len(diff_lines_list) > max_lines:
+        diff_text = "".join(diff_lines_list[:max_lines])
+        diff_text += f"\n... diff truncated ({len(diff_lines_list) - max_lines} more lines)\n"
+
+    return diff_text
+
+
+# --- File operations ---
 
 
 def list_directory(
@@ -214,7 +325,14 @@ def insert_in_file(_context: Context, path: str, insert_line: int, new_str: str)
 
 
 def write_file(_context: Context, path: str, content: str) -> str:
-    """Write content to a file with proper error handling.
+    """Write content to a file with proper error handling and diff output.
+
+    Note:
+        If the file exists, it will be read first to generate a diff.
+        This requires read permissions even for write operations.
+        Binary files are detected and handled without diff output.
+        In multi-process scenarios, the file could change between read and write (race condition).
+        For the AI agent use case (single-user), this is acceptable.
 
     Args:
         _context: Execution context (unused)
@@ -222,20 +340,183 @@ def write_file(_context: Context, path: str, content: str) -> str:
         content: Complete content to write to the file
 
     Returns:
-        Success message or an error message string
+        Success message with diff or an error message string. Return formats:
+        - New files: "Created {path} ({n} lines)\\n{diff}"
+        - Modified files: "Updated {path} ({new} lines, was {old} lines)\\n{diff}"
+        - Binary files: "Updated binary file: {path}\\nOld: {size} → New: {size}"
+        - No changes: "No changes: {path} (content identical)"
+        - Large files: "Updated large file: {path}\\n(Diff suppressed for large files)"
+        - Errors: "Error [{ID}]: {description}"
     """
-
     try:
         file_path = Path(path).expanduser().resolve()
+    except OSError as ex:
+        logger.error(
+            f"Failed to resolve path '{path}': {ex}",
+            extra={"error_id": FILE_PATH_RESOLUTION_ERROR, "file_path": path},
+            exc_info=True,
+        )
+        return f"Error [{FILE_PATH_RESOLUTION_ERROR}]: Error resolving path '{path}': {ex}"
+
+    # Read existing content if file exists
+    old_content: str | None = None
+    file_existed = False
+    was_binary = False
+
+    try:
+        if file_path.exists():
+            file_existed = True
+            try:
+                # Check for binary file
+                raw_bytes = file_path.read_bytes()
+                if is_binary_content(raw_bytes):
+                    was_binary = True
+                else:
+                    old_content = file_path.read_text(encoding="utf-8")
+            except (UnicodeDecodeError, PermissionError) as e:
+                # Handle unreadable files
+                logger.error(
+                    f"Failed to read existing file '{path}': {e}",
+                    extra={
+                        "error_id": FILE_READ_ERROR,
+                        "file_path": path,
+                        "error_type": type(e).__name__,
+                    },
+                    exc_info=True,
+                )
+                return f"Error [{FILE_READ_ERROR}]: Cannot read existing file: {e}"
+            except IsADirectoryError as ex:
+                logger.error(
+                    f"Path is a directory '{path}': {ex}",
+                    extra={"error_id": FILE_WRITE_IS_DIRECTORY, "file_path": path},
+                    exc_info=True,
+                )
+                return f"Error [{FILE_WRITE_IS_DIRECTORY}]: Path is a directory, not a file: {path}"
+            except OSError as ex:
+                logger.error(
+                    f"Failed to access existing file '{path}': {ex}",
+                    extra={"error_id": FILE_READ_ERROR, "file_path": path},
+                    exc_info=True,
+                )
+                return f"Error [{FILE_READ_ERROR}]: Error accessing file {path}: {ex}"
+    except OSError as ex:
+        logger.error(
+            f"Failed to check existence of file '{path}': {ex}",
+            extra={"error_id": FILE_READ_ERROR, "file_path": path},
+            exc_info=True,
+        )
+        return f"Error [{FILE_READ_ERROR}]: Error accessing file {path}: {ex}"
+
+    # Handle binary files
+    if was_binary:
+        try:
+            try:
+                old_size = file_path.stat().st_size
+            except OSError as ex:
+                logger.error(f"Failed to stat binary file '{path}': {ex}", exc_info=True)
+                return f"Error [{FILE_STAT_ERROR}]: Cannot access file {path} for size info: {ex}"
+
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(content, encoding="utf-8")
+            new_size = len(content.encode("utf-8"))
+            return (
+                f"Updated binary file: {path}\n"
+                f"Old: {format_size(old_size)} → New: {format_size(new_size)}"
+            )
+        except PermissionError as ex:
+            logger.error(
+                f"Permission denied writing to binary file '{path}': {ex}",
+                extra={"error_id": FILE_WRITE_PERMISSION_DENIED, "file_path": path},
+                exc_info=True,
+            )
+            return f"Error [{FILE_WRITE_PERMISSION_DENIED}]: Permission denied writing to {path}"
+        except OSError as ex:
+            logger.error(
+                f"OS error writing to binary file '{path}': {ex}",
+                extra={"error_id": FILE_WRITE_OS_ERROR, "file_path": path},
+                exc_info=True,
+            )
+            return f"Error [{FILE_WRITE_OS_ERROR}]: Error writing file {path}: {ex}"
+
+    # Check if content is identical (no-op)
+    if old_content is not None and old_content == content:
+        return f"No changes: {path} (content identical)"
+
+    # Check for large file - skip diff if too large
+    if old_content is not None and len(old_content) > settings.DIFF_MAX_FILE_SIZE:
+        try:
+            old_size = len(old_content)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(content, encoding="utf-8")
+            new_size = len(content)
+            return (
+                f"Updated large file: {path}\n"
+                f"Old: {old_size} chars → New: {new_size} chars\n"
+                f"(Diff suppressed for large files)"
+            )
+        except PermissionError as ex:
+            logger.error(
+                f"Permission denied writing to large file '{path}': {ex}",
+                extra={"error_id": FILE_WRITE_PERMISSION_DENIED, "file_path": path},
+                exc_info=True,
+            )
+            return f"Error [{FILE_WRITE_PERMISSION_DENIED}]: Permission denied writing to {path}"
+        except OSError as ex:
+            logger.error(
+                f"OS error writing to large file '{path}': {ex}",
+                extra={"error_id": FILE_WRITE_OS_ERROR, "file_path": path},
+                exc_info=True,
+            )
+            return f"Error [{FILE_WRITE_OS_ERROR}]: Error writing file {path}: {ex}"
+
+    # Generate diff if enabled
+    diff = ""
+    if settings.DIFF_ENABLED:
+        try:
+            diff = generate_unified_diff(old_content, content, file_path)
+            diff = f"\n{diff}"
+        except Exception as ex:
+            logger.warning(f"Failed to generate diff for '{path}': {ex}", exc_info=True)
+            diff = "\n(Diff generation failed)"
+
+    # Write the file
+    try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(content, encoding="utf-8")
-        return f"Successfully wrote {len(content)} chars to {path}"
-    except PermissionError:
-        return f"Error: Permission denied writing to {path}"
-    except IsADirectoryError:
-        return f"Error: Path is a directory, not a file: {path}"
+    except PermissionError as ex:
+        logger.error(
+            f"Permission denied writing to file '{path}': {ex}",
+            extra={"error_id": FILE_WRITE_PERMISSION_DENIED, "file_path": path},
+            exc_info=True,
+        )
+        return f"Error [{FILE_WRITE_PERMISSION_DENIED}]: Permission denied writing to {path}"
+    except IsADirectoryError as ex:
+        logger.error(
+            f"Path is a directory '{path}': {ex}",
+            extra={"error_id": FILE_WRITE_IS_DIRECTORY, "file_path": path},
+            exc_info=True,
+        )
+        return f"Error [{FILE_WRITE_IS_DIRECTORY}]: Path is a directory, not a file: {path}"
     except OSError as ex:
-        return f"Error writing file {path}: {ex}"
+        logger.error(
+            f"OS error writing to file '{path}': {ex}",
+            extra={"error_id": FILE_WRITE_OS_ERROR, "file_path": path},
+            exc_info=True,
+        )
+        return f"Error [{FILE_WRITE_OS_ERROR}]: Error writing file {path}: {ex}"
+
+    # Build result message
+    if file_existed:
+        action = "Updated"
+        old_lines = len(old_content.splitlines()) if old_content else 0
+        new_lines = len(content.splitlines())
+        summary = f"{action} {path} ({new_lines} lines, was {old_lines} lines)"
+    else:
+        action = "Created"
+        new_lines = len(content.splitlines())
+        summary = f"{action} {path} ({new_lines} lines)"
+
+    return summary + diff
 
 
 def run_grep_search(
