@@ -14,11 +14,13 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Generator
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
+
+import openai
 
 from meto.agent.agent import Agent
 from meto.agent.context import Context
-from meto.agent.exceptions import AgentInterrupted, MaxStepsExceededError
+from meto.agent.exceptions import AgentInterrupted, LLMError, MaxStepsExceededError
 from meto.agent.hooks import (
     post_tool_use,
     pre_tool_use,
@@ -43,6 +45,13 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
     In interactive mode, this function is called repeatedly and shares
     module state (`history`) so the conversation continues.
+
+    The loop:
+    1. Resets rule injection tracking for the new prompt
+    2. Calls the LLM with system prompt + history
+    3. Extracts reasoning_content if present
+    4. Executes requested tools with pre/post hooks
+    5. Appends tool results back to history
 
     Raises:
         AgentInterrupted: If the user interrupts with Ctrl-C during execution.
@@ -81,17 +90,37 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                     *context.history,
                 ]
 
-                resp = get_client().chat.completions.create(
-                    model=settings.DEFAULT_MODEL,
-                    messages=messages,
-                    tools=cast(Any, agent.tools),
-                    extra_body={
-                        "thinking": {
-                            "type": "enabled",  # enable thinking
-                            "clear_thinking": False,  # keep reasoning across turns (preserved thinking)
-                        }
-                    },
-                )
+                try:
+                    resp = get_client().chat.completions.create(
+                        model=settings.DEFAULT_MODEL,
+                        messages=messages,
+                        tools=cast(Any, agent.tools),
+                        extra_body={
+                            "thinking": {
+                                "type": "enabled",  # enable thinking
+                                "clear_thinking": False,  # keep reasoning across turns (preserved thinking)
+                            }
+                        },
+                    )
+                except (openai.OpenAIError, LLMError) as e:
+                    # If it's already an LLMError (e.g. from get_client's validation), re-raise it
+                    if isinstance(e, LLMError):
+                        reasoning_logger.log_loop_completion(f"LLM configuration error: {e}")
+                        raise
+
+                    # Provide clearer guidance for common OpenAI API errors
+                    if isinstance(e, openai.AuthenticationError):
+                        msg = f"LLM authentication failed: {e}. Check your METO_LLM_API_KEY."
+                    elif isinstance(e, openai.APIConnectionError):
+                        msg = f"Could not connect to LLM provider at {settings.LLM_BASE_URL}: {e}. Check your internet connection and METO_LLM_BASE_URL."
+                    elif isinstance(e, openai.RateLimitError):
+                        msg = f"LLM rate limit exceeded: {e}. Please wait before trying again."
+                    else:
+                        msg = f"LLM API returned an error: {e}"
+
+                    reasoning_logger.log_loop_completion(f"LLM API error: {e}")
+                    logger.error(msg)
+                    raise LLMError(msg) from e
 
                 msg = resp.choices[0].message
                 assistant_content = msg.content or ""
@@ -234,7 +263,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                             register_tool_handler(schema_name, pending_tool.handler)
 
-                        context.pending_tools.clear()
+                        context.clear_pending_tools()
 
         reasoning_logger.log_loop_completion(f"Reached max turns ({agent.max_turns})")
         raise MaxStepsExceededError(f"Exceeded maximum of {agent.max_turns} turns")

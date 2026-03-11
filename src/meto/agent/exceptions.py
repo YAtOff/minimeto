@@ -5,6 +5,10 @@ class AgentError(Exception):
     """Base class for meto agent errors."""
 
 
+class ContextForkError(AgentError):
+    """Raised when a context cannot be forked (e.g., logging directory creation fails)."""
+
+
 class SessionNotFoundError(AgentError):
     """Raised when a session file cannot be found."""
 
@@ -39,3 +43,7 @@ class SkillAgentValidationError(AgentError):
 
 class MCPInitializationError(AgentError):
     """Raised when MCP tools cannot be initialized or discovered."""
+
+
+class LLMError(AgentError):
+    """Raised when an error occurs while calling the LLM API (OpenAI/LiteLLM)."""

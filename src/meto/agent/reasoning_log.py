@@ -141,16 +141,21 @@ class ReasoningLogger:
         self._log(logging.INFO, f"Tool calls requested: {len(tool_calls)}")
 
         # Log token usage if available
-        if hasattr(response, "usage"):
+        if hasattr(response, "usage") and response.usage:
             usage = response.usage
+            prompt_tokens_details = getattr(usage, "prompt_tokens_details", None)
+            cached_tokens = (
+                getattr(prompt_tokens_details, "cached_tokens", 0) if prompt_tokens_details else 0
+            )
+
             self._log(
                 logging.INFO,
-                f"Token usage - Input: {usage.prompt_tokens}({usage.prompt_tokens_details.cached_tokens}), "
+                f"Token usage - Input: {usage.prompt_tokens}({cached_tokens}), "
                 f"Output: {usage.completion_tokens}",
             )
             # Also print to console for user visibility
             self.console.print(
-                f"[dim]🪙 {usage.prompt_tokens}({usage.prompt_tokens_details.cached_tokens}) ↗️, {usage.completion_tokens} ↘️[/]"
+                f"[dim]🪙 {usage.prompt_tokens}({cached_tokens}) ↗️, {usage.completion_tokens} ↘️[/]"
             )
 
     def log_tool_selection(self, tool_name: str, arguments: dict[str, Any]) -> None:

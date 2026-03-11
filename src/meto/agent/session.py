@@ -8,6 +8,7 @@ import os
 import random
 import re
 import threading
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,22 +21,61 @@ from meto.conf import settings
 @dataclass
 class Node:
     message: dict[str, Any]
-    parent: Node | None = None
-    children: list[Node] = field(default_factory=list)
+    parent: Node | None = field(default=None, repr=False)
+    _children: list[Node] = field(default_factory=list, repr=False)
+
+    def __post_init__(self) -> None:
+        # Validate message structure
+        if "role" not in self.message:
+            raise ValueError("message must have 'role' field")
+
+        # Prevent cycles
+        if self.parent is self:
+            raise ValueError("Node cannot be its own parent")
+
+        if self.parent:
+            self.parent.add_child(self)
+
+    @property
+    def children(self) -> tuple[Node, ...]:
+        """Immutable view of child nodes."""
+        return tuple(self._children)
+
+    def add_child(self, child: Node) -> None:
+        """Add a child node while ensuring tree invariants."""
+        if child in self._children:
+            return
+        if child.parent is not None and child.parent is not self:
+            raise ValueError("Child already has a different parent")
+        self._children.append(child)
+        child.parent = self
 
 
 logger = logging.getLogger("agent")
 
 
 def generate_session_id() -> str:
-    """Generate timestamp-based session ID: {timestamp}-{random_suffix}."""
+    """Generate timestamp-based session ID.
+
+    Format: {timestamp}-{random_suffix}
+    Example: 20240310_143052-abc123
+
+    The format must match the regex ^[a-zA-Z0-9_\\-]+$ for validation.
+    """
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     random_suffix = "".join(random.choices("abcdefghijklmnopqrstuvwxyz0123456789", k=6))
     return f"{timestamp}-{random_suffix}"
 
 
 class SessionLogger:
-    """Append-only JSONL logger for chat history persistence."""
+    """Append-only JSONL logger for chat history persistence.
+
+    Each session gets its own directory (log_dir) containing log.jsonl.
+    Child sessions are nested under log_dir/children/{child_id}/ for
+    hierarchical organization.
+    """
+
+    log_dir: Path
 
     def __init__(
         self, session_id: str, session_file: Path | None = None, log_dir: Path | None = None
@@ -134,12 +174,28 @@ class SessionLogger:
         self._append(msg)
 
 
-class SessionHistory(list[dict[str, Any]]):
-    """List that auto-logs appends to session_logger."""
+class SessionHistory(Sequence[dict[str, Any]]):
+    """Encapsulated history that maintains dual list/tree representations."""
 
     _session_logger: SessionLogger
-    checkpoints: dict[str, Node]
-    head: Node | None
+    _checkpoints: dict[str, Node]
+    _head: Node | None
+    _history: list[dict[str, Any]]
+
+    @property
+    def session_logger(self) -> SessionLogger:
+        """Return the underlying session logger."""
+        return self._session_logger
+
+    @property
+    def head(self) -> Node | None:
+        """Return the current head node in the history tree."""
+        return self._head
+
+    @property
+    def checkpoints(self) -> dict[str, Node]:
+        """Return the named checkpoints mapped to nodes."""
+        return self._checkpoints
 
     def __init__(
         self,
@@ -148,12 +204,18 @@ class SessionHistory(list[dict[str, Any]]):
         checkpoints: dict[str, Node] | None = None,
     ) -> None:
         self._session_logger = session_logger
-        self.head = head
-        self.checkpoints = checkpoints or {}
-        super().__init__([node.message for node in self._get_active_path()])
+        self._head = head
+        self._checkpoints = checkpoints or {}
+        self._history = [node.message for node in self._get_active_path()]
 
     def _get_active_path(self) -> list[Node]:
-        curr = self.head
+        """Traverse from head to root to build the active message path.
+
+        Returns:
+            A reversed list of nodes from root to head, representing
+            the current linear conversation history.
+        """
+        curr = self._head
         path: list[Node] = []
         while curr:
             path.append(curr)
@@ -162,13 +224,26 @@ class SessionHistory(list[dict[str, Any]]):
         return path
 
     @override
-    def append(self, item: dict[str, Any]) -> None:
-        node = Node(item, parent=self.head)
-        if self.head:
-            self.head.children.append(node)
-        self.head = node
+    def __len__(self) -> int:
+        return len(self._history)
 
-        super().append(item)
+    @override
+    def __getitem__(self, index: Any) -> Any:
+        return self._history[index]
+
+    @override
+    def __repr__(self) -> str:
+        return f"SessionHistory({self._history!r})"
+
+    @override
+    def __iter__(self) -> Iterator[dict[str, Any]]:
+        return iter(self._history)
+
+    def append(self, item: dict[str, Any]) -> None:
+        """Add a message to history, maintaining tree and list representations."""
+        node = Node(item, parent=self._head)
+        self._head = node
+        self._history.append(item)
 
         role = item.get("role")
         if role == "user":
@@ -183,23 +258,31 @@ class SessionHistory(list[dict[str, Any]]):
         self._session_logger.log_compact(summary)
 
     def log_checkpoint(self, name: str) -> None:
-        """Create a checkpoint at the current history state."""
-        if self.head:
-            self.checkpoints[name] = self.head
+        """Create a checkpoint at the current history state.
+
+        Stores a reference to the current head node, enabling efficient
+        rewinding without copying or indexing into the history list.
+        """
+        if self._head:
+            self._checkpoints[name] = self._head
             self._session_logger.log_checkpoint(name)
 
     def log_rewind(self, name: str) -> bool:
         """Rewind history to the specified checkpoint.
 
+        Updates the head pointer to the checkpointed node and rebuilds
+        the list view from the active path. The full tree is preserved
+        on disk for potential alternate branch restoration.
+
         Returns:
             True if checkpoint was found and rewound, False otherwise.
         """
-        if name not in self.checkpoints:
+        if name not in self._checkpoints:
             return False
 
-        self.head = self.checkpoints[name]
-        self.clear()
-        self.extend([node.message for node in self._get_active_path()])
+        self._head = self._checkpoints[name]
+        # Rebuild history list view
+        self._history = [node.message for node in self._get_active_path()]
 
         self._session_logger.log_rewind(name)
         return True
@@ -208,20 +291,23 @@ class SessionHistory(list[dict[str, Any]]):
 class Session:
     """Wraps session_id, history and session_logger for unified session management."""
 
-    session_id: str
-    working_dir: Path
-    history: SessionHistory
-    permissions: dict[str, bool]
-    yolo: bool
+    _session_id: str
+    _working_dir: Path
+    _history: SessionHistory
+    _permissions: dict[str, bool]
+    _yolo: bool
 
     @classmethod
-    def load(cls, session_id: str, session_dir: Path = settings.SESSION_DIR, yolo: bool = False) -> Session:
+    def load(
+        cls, session_id: str, session_dir: Path = settings.SESSION_DIR, yolo: bool = False
+    ) -> Session:
         """Load session by ID, returning Session instance.
 
         If a compact marker exists in the session file, only messages after
         the last compact marker are loaded. The full history is preserved on disk.
         """
 
+        # Session ID validation moved to __init__ but kept here for early exit
         if not re.match(r"^[a-zA-Z0-9_\-]+$", session_id):
             raise ValueError(
                 f"Invalid session ID format: '{session_id}'. "
@@ -241,7 +327,7 @@ class Session:
         messages_loaded = 0
 
         # First pass: read all lines and find last compact marker
-        skipped_count = 0
+        skipped_lines: list[int] = []
         try:
             lines: list[tuple[int, dict[str, Any]]] = []
             with open(session_file, encoding="utf-8") as f:
@@ -254,7 +340,7 @@ class Session:
                                 last_compact_index = i
                         except json.JSONDecodeError:
                             logger.warning(f"Skipping malformed line {i} in session {session_id}")
-                            skipped_count += 1
+                            skipped_lines.append(i)
                             continue
 
             # Second pass: construct history tree (skip header + pre-compact messages)
@@ -294,8 +380,6 @@ class Session:
                     msg["tool_call_id"] = raw["tool_call_id"]
 
                 new_node = Node(msg, parent=head)
-                if head:
-                    head.children.append(new_node)
                 head = new_node
                 messages_loaded += 1
 
@@ -305,10 +389,11 @@ class Session:
                     f"loading messages after compact"
                 )
 
-            if skipped_count > 0:
-                logger.warning(
-                    f"Session {session_id}: skipped {skipped_count} malformed lines. "
-                    "History may be incomplete."
+            if skipped_lines:
+                logger.error(
+                    f"Session {session_id}: Failed to parse {len(skipped_lines)} lines "
+                    f"(lines: {skipped_lines[:5]}{'...' if len(skipped_lines) > 5 else ''}). "
+                    "History may be incomplete. Consider restoring from backup."
                 )
 
         except OSError as e:
@@ -347,11 +432,53 @@ class Session:
         permissions: dict[str, bool] | None = None,
         yolo: bool = False,
     ) -> None:
-        self.session_id = session_id
-        self.working_dir = working_dir
-        self.history = history
-        self.permissions = permissions or {}
-        self.yolo = yolo
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", session_id):
+            raise ValueError(
+                f"Invalid session ID format: '{session_id}'. "
+                "Only alphanumeric characters, underscores and hyphens are allowed."
+            )
+        if not working_dir.exists():
+            raise FileNotFoundError(f"Working directory does not exist: {working_dir}")
+
+        self._session_id = session_id
+        self._working_dir = working_dir
+        self._history = history
+        self._permissions = {}  # Explicitly initialize for basedpyright
+        self.permissions = permissions or {}  # Uses setter for validation
+        self._yolo = yolo
+
+    @property
+    def session_id(self) -> str:
+        """Read-only session ID."""
+        return self._session_id
+
+    @property
+    def working_dir(self) -> Path:
+        """Read-only working directory."""
+        return self._working_dir
+
+    @property
+    def history(self) -> SessionHistory:
+        """Read-only history object."""
+        return self._history
+
+    @property
+    def yolo(self) -> bool:
+        """Global YOLO mode flag."""
+        return self._yolo
+
+    @yolo.setter
+    def yolo(self, value: bool) -> None:
+        self._yolo = value
+
+    @property
+    def permissions(self) -> dict[str, bool]:
+        """Dictionary of session-scoped permissions."""
+        return self._permissions
+
+    @permissions.setter
+    def permissions(self, value: dict[str, bool]) -> None:
+        self._permissions = dict(value)  # Copy to prevent external mutation
 
     def compact(self, summary: str) -> None:
         """Log a compact marker to truncate history on next load.

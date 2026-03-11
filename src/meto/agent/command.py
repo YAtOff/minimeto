@@ -2,7 +2,7 @@ import json
 import logging
 import shlex
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import click
 import typer
@@ -47,7 +47,7 @@ def chat_commands(ctx: click.Context):
 )
 @click.option("--full", is_flag=True, help="Include system messages")
 @click.pass_context
-def export(ctx: "Context", path: str, format: str, full: bool):
+def export(ctx: click.Context, path: str, format: str, full: bool):
     """Export the current context.
     Usage: /export [path] [--format json|pretty_json|markdown|text] [--full]
     """
@@ -61,7 +61,7 @@ def export(ctx: "Context", path: str, format: str, full: bool):
 
 @chat_commands.command()
 @click.pass_context
-def context(ctx: "Context"):
+def context(ctx: click.Context):
     """Show current context summary."""
     session = ctx.obj["session"]
     format_context_summary(session.history)
@@ -69,7 +69,7 @@ def context(ctx: "Context"):
 
 @chat_commands.command()
 @click.pass_context
-def quit(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+def quit(ctx: click.Context):  # pyright: ignore[reportUnusedParameter]
     """Exit the REPL."""
     click.echo("Exiting...")
     raise typer.Exit(code=0)
@@ -77,14 +77,14 @@ def quit(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
 
 @chat_commands.command()
 @click.pass_context
-def exit(ctx: "Context"):
+def exit(ctx: click.Context):
     """Alias for quit."""
     ctx.invoke(quit)
 
 
 @chat_commands.command(name="help")
 @click.pass_context
-def show_help(ctx: "Context"):
+def show_help(ctx: click.Context):
     """Show available commands."""
     if ctx.parent:
         click.echo(ctx.parent.get_help())
@@ -94,14 +94,14 @@ def show_help(ctx: "Context"):
 
 @chat_commands.command()
 @click.pass_context
-def new(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+def new(ctx: click.Context):  # pyright: ignore[reportUnusedParameter]
     """Start a new session with fresh context."""
     raise NewSessionException
 
 
 @chat_commands.command()
 @click.pass_context
-def skills(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+def skills(ctx: click.Context):  # pyright: ignore[reportUnusedParameter]
     """List available skills.
 
     Shows all skills from both built-in and project-specific directories.
@@ -177,7 +177,7 @@ def skills(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
 
 @chat_commands.command()
 @click.pass_context
-def agents(ctx: "Context"):  # pyright: ignore[reportUnusedParameter]
+def agents(ctx: click.Context):  # pyright: ignore[reportUnusedParameter]
     """List available agents.
 
     Shows all agents from both built-in and project-specific directories.
@@ -274,6 +274,7 @@ def _summarize_tool_args(args: str, max_len: int = 60) -> str:
             parts.append(f"{k}={v_str}")
         return ", ".join(parts)
     except (json.JSONDecodeError, TypeError):
+        logger.debug(f"Failed to parse tool arguments as JSON: {args[:100]}...")
         return args[:max_len] + ("..." if len(args) > max_len else "")
 
 
@@ -419,12 +420,15 @@ def _display_compact_summary(stats: dict[str, Any], summary: str) -> None:
 
 @chat_commands.command()
 @click.pass_context
-def compact(ctx: "Context"):
+def compact(ctx: click.Context):
     """Compact the session context.
 
-    Shows a summary and logs a compact marker. When this session is
-    reloaded, messages before the marker will be skipped, reducing
-    memory usage while preserving full history on disk.
+    Generates an AI-powered summary of the conversation and logs a compact
+    marker. When this session is reloaded, messages before the marker will
+    be skipped, reducing memory usage while preserving full history on disk.
+
+    The summary uses an LLM for semantic condensation, falling back to
+    rule-based summarization if the LLM call fails.
     """
     session = ctx.obj["session"]
     stats = get_context_summary(session.history)
@@ -436,7 +440,7 @@ def compact(ctx: "Context"):
 @chat_commands.command()
 @click.argument("name", type=str)
 @click.pass_context
-def checkpoint(ctx: "Context", name: str):
+def checkpoint(ctx: click.Context, name: str):
     """Save a checkpoint of the current session history."""
     session = ctx.obj["session"]
     session.history.log_checkpoint(name)
@@ -446,7 +450,7 @@ def checkpoint(ctx: "Context", name: str):
 @chat_commands.command()
 @click.argument("name", type=str)
 @click.pass_context
-def rewind(ctx: "Context", name: str):
+def rewind(ctx: click.Context, name: str):
     """Rewind session history to a saved checkpoint."""
     session = ctx.obj["session"]
     if session.history.log_rewind(name):
