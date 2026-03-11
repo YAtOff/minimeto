@@ -50,6 +50,11 @@ class PermissionHook(PreToolUseHook, ABC):
         message = self.get_permission_message()
 
         # Check permission via manager
+        if not self.context.session:
+            return ErrorResult(
+                error=f"No active session for permission check: {message}",
+            )
+
         if PermissionManager.check_permission(key, message, self.context.session):
             return SuccessResult()
 

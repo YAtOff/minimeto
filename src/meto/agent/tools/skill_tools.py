@@ -52,8 +52,10 @@ def load_skill(context: Context, skill_name: str) -> str:
 
         return content
     except ValueError as e:
+        logger.warning(f"Validation error loading skill '{skill_name}': {e}")
         return f"Error: {e}"
     except OSError as ex:
+        logger.error(f"OS error loading skill '{skill_name}': {ex}")
         return f"Error: Failed to load skill '{skill_name}': {ex}"
     except Exception as ex:
         error_id = generate_error_id()
@@ -83,6 +85,9 @@ def load_agent(context: Context, agent_name: str) -> str:
         return json.dumps(agent_config, indent=2)
 
     except SkillAgentNotFoundError as e:
+        logger.warning(
+            f"Skill agent not found '{agent_name}' in skill '{context.active_skill}': {e}"
+        )
         # Provide helpful error message with available agents
         skill_loader = get_skill_loader()
         available = skill_loader.list_skill_agents(context.active_skill)
@@ -91,6 +96,9 @@ def load_agent(context: Context, agent_name: str) -> str:
             return f"Error: {e}\nAvailable agents: {available_str}"
         return f"Error: {e}"
     except SkillAgentValidationError as e:
+        logger.error(
+            f"Validation error for agent '{agent_name}' in skill '{context.active_skill}': {e}"
+        )
         return f"Error: {e}"
     except Exception as ex:
         error_id = generate_error_id()

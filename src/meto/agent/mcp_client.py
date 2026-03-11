@@ -135,7 +135,8 @@ def _discover_server(
         tools = asyncio.run(_run())
         return tools, None
     except Exception as exc:
-        logger.error(f"Failed to discover MCP tools for {server_name}: {exc}", exc_info=True)
+        # We don't log here to avoid redundant/premature error noise.
+        # Errors are aggregated and reported at the end of initialization.
         return [], f"{server_name}: {type(exc).__name__}: {exc}"
 
 
@@ -188,6 +189,15 @@ def initialize_mcp_registry(registry: ToolRegistry) -> None:
 
     _is_initialized = True
     if errors:
-        msg = "MCP tool discovery failed:\n" + "\n".join(f"  - {e}" for e in errors)
+        total = len(mcp_servers)
+        failed = len(errors)
+        success = total - failed
+
+        if success == 0:
+            msg = f"MCP tool discovery failed for all {total} servers:\n"
+        else:
+            msg = f"MCP tool discovery partially failed ({success}/{total} servers loaded):\n"
+
+        msg += "\n".join(f"  - {e}" for e in errors)
         logger.error(msg)
         raise MCPInitializationError(msg)

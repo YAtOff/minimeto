@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Annotated
 
@@ -23,6 +24,7 @@ from meto.conf import settings
 from meto.history import create_history
 
 app = typer.Typer(add_completion=False)
+logger = logging.getLogger(__name__)
 
 
 def _run_single_prompt(
@@ -89,6 +91,13 @@ def interactive_loop(session: Session) -> None:
             print(f"[New session: {session.session_id}]", flush=True)
         except typer.Exit:
             return
+        except Exception as e:
+            logger.exception(f"Unexpected error processing user input: {e}")
+            print(f"[Error] An unexpected error occurred: {e}", file=sys.stderr)
+            print(
+                "The session has been preserved. You can continue or type /exit to restart.",
+                file=sys.stderr,
+            )
 
 
 @app.callback(invoke_without_command=True)

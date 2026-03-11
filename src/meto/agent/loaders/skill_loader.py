@@ -120,6 +120,8 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
                 }
                 logger.debug(f"Discovered skill '{name}' at {skill_file}")
 
+        self._report_errors()
+
     def get_skill_descriptions(self) -> dict[str, str]:
         """Return name->description mapping for all discovered skills.
 

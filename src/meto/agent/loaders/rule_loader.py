@@ -189,6 +189,8 @@ class RuleLoader(BaseResourceLoader[RuleMetadata]):
                 self._resources[name] = rule
                 logger.debug(f"Discovered rule '{name}' at {rule_file}")
 
+        self._report_errors()
+
     def find_matching_rules(self, filename: str) -> list[RuleMetadata]:
         """Find all rules that match the given filename.
 

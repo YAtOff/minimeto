@@ -6,11 +6,14 @@ Used by tool execution.
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import subprocess
 
 from meto.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def get_shell_name() -> str:
@@ -99,11 +102,15 @@ def run_shell(command: str) -> str:
                 cwd=os.getcwd(),
             )
     except subprocess.TimeoutExpired:
+        logger.error(
+            f"Shell execution timed out after {settings.TOOL_TIMEOUT_SECONDS}s: {command[:100]}..."
+        )
         return (
             f"(timeout after {settings.TOOL_TIMEOUT_SECONDS}s). "
             "You can increase this limit by setting the METO_TOOL_TIMEOUT_SECONDS environment variable."
         )
     except OSError as ex:
+        logger.error(f"Shell execution failed for command '{command[:100]}...': {ex}")
         return f"(shell execution error: {ex})"
 
     output = (completed.stdout or "") + (completed.stderr or "")

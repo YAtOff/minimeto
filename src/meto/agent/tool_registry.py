@@ -26,6 +26,9 @@ class ToolRegistration:
         if not self.name:
             raise ValueError("Tool name cannot be empty")
 
+        if not callable(self.handler):
+            raise ValueError("Handler must be callable")
+
         schema_name = self.schema.get("function", {}).get("name")
         if schema_name != self.name:
             raise ValueError(f"Tool name mismatch: '{self.name}' != '{schema_name}' in schema")
@@ -86,11 +89,20 @@ class ToolRegistry:
         for tool in tools:
             name = str(getattr(tool, "name", "")).strip()
             if not name:
+                logger.warning("Skipping MCP tool with missing name: %s", tool)
                 continue
 
-            description = str(getattr(tool, "description", "") or "")
+            description = str(getattr(tool, "description", "") or "").strip()
+            if not description:
+                logger.warning("MCP tool '%s' has missing description", name)
+
             input_schema = getattr(tool, "inputSchema", None)
             if not isinstance(input_schema, dict):
+                logger.warning(
+                    "MCP tool '%s' has invalid inputSchema (expected dict, got %s). Using default empty schema.",
+                    name,
+                    type(input_schema).__name__,
+                )
                 input_schema = {"type": "object", "properties": {}}
 
             schema = {
@@ -118,6 +130,20 @@ class ToolRegistry:
             )
 
     def search(self, query: str, top_k: int = 3) -> list[ToolRegistration]:
+        """Search for tools by keyword matching.
+
+        Scoring algorithm:
+            - Token match in tool name: +3 points
+            - Token match in description: +1 point
+            - Results sorted by (score desc, name asc)
+
+        Args:
+            query: Search query (space-separated tokens)
+            top_k: Maximum number of results to return
+
+        Returns:
+            Up to top_k tools ranked by relevance score.
+        """
         if not query.strip():
             return []
 

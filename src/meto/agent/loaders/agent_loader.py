@@ -158,6 +158,8 @@ class AgentLoader(BaseResourceLoader[AgentMetadata]):
                         self._resources[name] = {**agent_config, "path": path}
                         logger.debug(f"Loaded agent '{name}' from {path}")
 
+        self._report_errors()
+
     def validate_agent_file(self, path: Path) -> tuple[AgentConfig | None, list[str]]:
         """Validate a single agent file and return its config and errors.
 

@@ -20,7 +20,7 @@ def search_available_tools(context: Context, query: str, top_k: int = 3) -> str:
     lines: list[str] = []
     for tool in results:
         if tool.name not in pending_names:
-            context.pending_tools.append(PendingTool(schema=tool.schema, handler=tool.handler))
+            context.add_pending_tool(PendingTool(schema=tool.schema, handler=tool.handler))
             pending_names.add(tool.name)
         lines.append(f"{tool.name}: {tool.description}")
 

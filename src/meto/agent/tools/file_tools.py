@@ -1,5 +1,6 @@
 """File and directory operations."""
 
+import logging
 import os
 import shutil
 import subprocess
@@ -10,6 +11,8 @@ from typing import Any
 from meto.agent.context import Context
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 def list_directory(
@@ -44,14 +47,15 @@ def list_directory(
             if entry.is_file():
                 try:
                     size = entry.stat().st_size
-                except OSError:
-                    pass
+                except OSError as e:
+                    logger.debug(f"Could not get size for {entry}: {e}")
 
             size_str = format_size(size) if entry.is_file() else ""
             try:
                 mtime = datetime.fromtimestamp(entry.stat().st_mtime)
                 mtime_str = mtime.strftime("%Y-%m-%d %H:%M")
-            except OSError:
+            except OSError as e:
+                logger.debug(f"Could not get mtime for {entry}: {e}")
                 mtime_str = "?"
 
             name = entry.name

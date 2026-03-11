@@ -26,6 +26,7 @@ class BaseResourceLoader[T]:
 
     directories: list[Path]
     _resources: dict[str, T]
+    _errors: dict[Path, str]
     _loaded: bool
 
     def __init__(self, directories: Path | list[Path]):
@@ -40,6 +41,7 @@ class BaseResourceLoader[T]:
             self.directories = directories
 
         self._resources = {}
+        self._errors = {}
         self._loaded = False
 
     def _ensure_loaded(self) -> None:
@@ -71,11 +73,15 @@ class BaseResourceLoader[T]:
             content = path.read_text(encoding="utf-8")
             parsed = parse_yaml_frontmatter(content)
             return parsed["metadata"], parsed["body"]
-        except (OSError, UnicodeDecodeError, yaml.YAMLError) as e:
-            logger.error(f"Failed to parse resource file {path}: {e}")
+        except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError) as e:
+            msg = f"Failed to parse resource file {path}: {e}"
+            logger.error(msg)
+            self._errors[path] = str(e)
             return None
         except Exception as e:
-            logger.error(f"Unexpected error parsing {path}: {e}", exc_info=True)
+            msg = f"Unexpected error parsing {path}: {e}"
+            logger.error(msg, exc_info=True)
+            self._errors[path] = str(e)
             raise
 
     def validate_directories(self) -> list[Path]:
@@ -98,7 +104,17 @@ class BaseResourceLoader[T]:
 
         return valid_dirs
 
+    def _report_errors(self) -> None:
+        """Log a summary of errors encountered during discovery."""
+        if self._errors:
+            failed_count = len(self._errors)
+            failed_paths = [str(p) for p in self._errors.keys()]
+            logger.warning(
+                f"Failed to parse {failed_count} resource files during discovery: {failed_paths}"
+            )
+
     def clear_cache(self) -> None:
         """Clear the resource cache."""
         self._resources = {}
+        self._errors = {}
         self._loaded = False
