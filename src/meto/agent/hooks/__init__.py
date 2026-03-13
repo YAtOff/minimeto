@@ -49,6 +49,9 @@ def post_tool_use(
 
 
 # New hooks can be added to this list to be imported and registered
+# IMPORTANT: DangerousCommandHook must be imported FIRST to block dangerous
+# commands before permission prompts are shown (hooks run in import order)
+from .dangerous_command import DangerousCommandHook  # noqa: F401
 from .permissions import (  # noqa: F401
     FetchPermissionHook,
     FilePermissionHook,

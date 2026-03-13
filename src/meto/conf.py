@@ -120,6 +120,38 @@ class Settings(BaseSettings):
         description="Enable permission checks for sensitive operations (shell, fetch, file access outside CWD).",
     )
 
+    # --- Dangerous Command Protection (bypasses yolo mode) ---
+
+    DANGEROUS_COMMAND_ENABLED: bool = Field(
+        default=True,
+        description="Enable LLM-based dangerous command detection. Always active even in yolo mode.",
+    )
+
+    DANGEROUS_COMMAND_MODEL: str = Field(
+        default="gpt-4o-mini",
+        description="Model to use for dangerous command analysis.",
+    )
+
+    DANGEROUS_COMMAND_TIMEOUT: int = Field(
+        default=10,
+        description="Timeout (seconds) for LLM command analysis.",
+    )
+
+    DANGEROUS_COMMAND_MAX_LENGTH: int = Field(
+        default=10000,
+        description="Maximum command length to analyze. Longer commands use fallback behavior.",
+    )
+
+    DANGEROUS_COMMAND_ALLOWLIST: list[str] = Field(
+        default=[],
+        description="List of command patterns to always allow (substring match).",
+    )
+
+    DANGEROUS_COMMAND_FALLBACK: str = Field(
+        default="block",
+        description="Behavior when LLM analysis fails: 'block' (safe) or 'allow' (permissive).",
+    )
+
     # --- Session Compaction ---
 
     COMPACT_SUMMARY_MODEL: str = Field(
