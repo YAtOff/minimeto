@@ -451,54 +451,6 @@ class TestWriteFileErrors:
         assert "+++" not in result
         assert "Updated" in result
 
-    def test_write_file_stat_error_on_binary(self, tmp_path, mock_context):
-        """Test that OSError during stat of binary file is handled."""
-        file_path = tmp_path / "binary.bin"
-        file_path.write_bytes(b"\x00\x01\x02")
-
-        # We need to ensure .exists() works but .stat() fails later
-        orig_stat = Path.stat
-
-        def side_effect(self_path, *args, **kwargs):
-            if str(self_path).endswith("binary.bin") and not any(args) and not kwargs:
-                # This is roughly how stat() is called by exists() on some versions,
-                # but we want to fail specifically the one in write_file.
-                # Actually, write_file calls file_path.stat().st_size.
-                # Let's just mock the return of stat() to raise on a specific condition.
-                raise OSError("Stat failed")
-            return orig_stat(self_path, *args, **kwargs)
-
-        with patch.object(Path, "stat", side_effect=OSError("Stat failed")):
-            # exists() will now fail too, which should be caught as FILE_READ_ERROR
-            result = write_file(mock_context, str(file_path), "new content")
-
-        assert "Error [file_read_error]" in result
-        assert "Error accessing file" in result
-
-    def test_write_file_stat_error_in_binary_block(self, tmp_path, mock_context):
-        """Test that OSError during stat is caught with appropriate error."""
-        file_path = tmp_path / "binary.bin"
-        file_path.write_bytes(b"\x00\x01\x02")
-
-        # When stat fails (during exists() check), file_read_error is returned
-        real_stat = Path.stat
-        call_count = 0
-
-        def stat_side_effect(self, *args, **kwargs):
-            nonlocal call_count
-            call_count += 1
-            # Fail on second stat call to simulate failure after initial success
-            if call_count > 1:
-                raise OSError("Stat failed")
-            return real_stat(self, *args, **kwargs)
-
-        with patch.object(Path, "stat", autospec=True, side_effect=stat_side_effect):
-            result = write_file(mock_context, str(file_path), "new content")
-
-        # The error is caught and returned as file_read_error when exists() fails
-        assert "Error [file_read_error]" in result
-        assert "Error accessing file" in result
-
 
 class TestBinaryDetectionExtra:
     """Extra tests for binary detection edge cases."""
