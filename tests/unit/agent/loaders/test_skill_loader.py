@@ -93,3 +93,54 @@ def test_skill_discovery_reports_errors(tmp_path, caplog):
     assert "Failed to parse 1 resource files during discovery" in caplog.text
     assert str(bad_skill_file) in caplog.text
     assert "bad_skill" not in loader.list_skills()
+
+
+def test_skill_loader_new_frontmatter(tmp_path):
+    # Create a mock skill directory
+    skill_dir = tmp_path / "test-skill"
+    skill_dir.mkdir()
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text(
+        """---
+description: Test skill
+allowed-tools: ["shell", "read_file"]
+context: fork
+agent: planner
+model: gpt-4o
+---
+Skill body
+""",
+        encoding="utf-8",
+    )
+
+    loader = SkillLoader(tmp_path)
+
+    assert loader.has_skill("test-skill")
+    config = loader.get_skill_config("test-skill")
+
+    assert config["description"] == "Test skill"
+    assert config["allowed_tools"] == ["shell", "read_file"]
+    assert config["context"] == "fork"
+    assert config["agent"] == "planner"
+    assert config["model"] == "gpt-4o"
+    assert "Skill body" in config["content"]
+
+
+def test_skill_loader_normalization(tmp_path):
+    # Test underscore normalization for allowed_tools
+    skill_dir = tmp_path / "test-skill-2"
+    skill_dir.mkdir()
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text(
+        """---
+description: Test skill 2
+allowed_tools: ["ls"]
+---
+Skill body
+""",
+        encoding="utf-8",
+    )
+
+    loader = SkillLoader(tmp_path)
+    config = loader.get_skill_config("test-skill-2")
+    assert config["allowed_tools"] == ["ls"]

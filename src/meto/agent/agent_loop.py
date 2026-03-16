@@ -91,8 +91,9 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                 ]
 
                 try:
+                    model = agent.model or settings.DEFAULT_MODEL
                     resp = get_client().chat.completions.create(
-                        model=settings.DEFAULT_MODEL,
+                        model=model,
                         messages=messages,
                         tools=cast(Any, agent.tools),
                         extra_body={
@@ -127,7 +128,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                 tool_calls: list[Any] = list(getattr(msg, "tool_calls", None) or [])
 
                 # Log model reasoning and response
-                reasoning_logger.log_model_response(resp, settings.DEFAULT_MODEL)
+                reasoning_logger.log_model_response(resp, model)
 
                 # Extract and log reasoning content
                 reasoning_content = getattr(msg, "reasoning_content", None) or ""

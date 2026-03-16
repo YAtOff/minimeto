@@ -10,6 +10,9 @@ from openai import OpenAI
 from rich.console import Console
 from rich.table import Table
 
+from meto.agent.agent import Agent, get_tools_for_agent
+from meto.agent.agent_loop import run_agent_loop
+from meto.agent.context import Context
 from meto.agent.history_export import (
     dump_agent_context,
     format_context_summary,
@@ -17,8 +20,10 @@ from meto.agent.history_export import (
     save_agent_context,
 )
 from meto.agent.loaders.agent_loader import get_agents
+from meto.agent.loaders.skill_expander import SkillExpander
 from meto.agent.loaders.skill_loader import get_skill_loader
 from meto.agent.session import Session
+from meto.agent.todo import TodoManager
 from meto.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -457,6 +462,83 @@ def rewind(ctx: click.Context, name: str):
         click.echo(f"Rewound history to checkpoint '{name}'.")
     else:
         click.echo(f"Checkpoint '{name}' not found.", err=True)
+
+
+@chat_commands.command()
+@click.argument("skill_name", type=str)
+@click.argument("args", nargs=-1)
+@click.pass_context
+def use(ctx: click.Context, skill_name: str, args: tuple[str, ...]):
+    """Invoke a skill with arguments.
+    Usage: /use <skill-name> [args...]
+    """
+    session = ctx.obj["session"]
+    loader = get_skill_loader()
+
+    if not loader.has_skill(skill_name):
+        available = ", ".join(loader.list_skills())
+        click.echo(
+            f"Error: Skill '{skill_name}' not found. Available skills: {available or '(none)'}",
+            err=True,
+        )
+        return
+
+    try:
+        # 1. Get skill configuration
+        config = loader.get_skill_config(skill_name)
+
+        # 2. Expand skill body
+        expander = SkillExpander()
+        expanded_body = expander.expand(config["content"], args)
+
+        # 3. Determine execution context
+        agent_name = config.get("agent")
+        is_fork = config.get("context") == "fork" or bool(agent_name)
+        allowed_tools = config.get("allowed_tools") or "*"
+        model = config.get("model")
+
+        base_context = Context(
+            todos=TodoManager(),
+            history=session.history,
+            session=session,
+            context_id=session.session_id,
+        )
+
+        # 4. Prepare execution
+        if is_fork:
+            # Forked context: isolated history, shared todos
+            exec_context = base_context.fork()
+            click.echo(f"[Forked context: {exec_context.context_id}]")
+
+            if agent_name:
+                agent = Agent.subagent(agent_name, skill_name=skill_name)
+                if allowed_tools != "*":
+                    intersected = [t for t in agent.tool_names if t in allowed_tools]
+                    agent.tools = get_tools_for_agent(intersected)
+            else:
+                agent = Agent.fork(allowed_tools=allowed_tools)
+
+            if model:
+                agent.model = model
+
+            for output in run_agent_loop(agent, expanded_body, exec_context):
+                click.echo(output)
+        else:
+            # Current context: run in the existing session
+            agent = Agent(
+                name="main",
+                prompt="",
+                allowed_tools=allowed_tools,
+                max_turns=settings.MAIN_AGENT_MAX_TURNS,
+                model=model,
+            )
+
+            for output in run_agent_loop(agent, expanded_body, base_context):
+                click.echo(output)
+
+    except Exception as e:
+        logger.exception(f"Error executing skill '{skill_name}': {e}")
+        click.echo(f"Error: {e}", err=True)
 
 
 def execute_chat_command(cmdline: str, session: "Session") -> tuple[bool, str]:

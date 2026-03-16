@@ -72,6 +72,7 @@ class Agent:
     _prompt: str
     _max_turns: int
     _tools: tuple[dict[str, Any], ...]
+    _model: str | None
 
     def __init__(
         self,
@@ -79,6 +80,7 @@ class Agent:
         prompt: str,
         allowed_tools: list[str] | str,
         max_turns: int,
+        model: str | None = None,
     ) -> None:
         """Create an Agent.
 
@@ -87,6 +89,7 @@ class Agent:
             prompt: Optional extra per-agent system prompt content.
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
+            model: Optional LLM model override.
         """
         if max_turns <= 0:
             raise ValueError(f"max_turns must be at least 1, got {max_turns}")
@@ -95,9 +98,20 @@ class Agent:
         self._prompt = prompt
         self._max_turns = max_turns
         self._tools = ()  # Explicitly initialize for basedpyright
+        self._model = model
 
         # Use the setter to trigger validation
         self.tools = get_tools_for_agent(allowed_tools)
+
+    @property
+    def model(self) -> str | None:
+        """Return the model override for this agent."""
+        return self._model
+
+    @model.setter
+    def model(self, value: str | None) -> None:
+        """Set the model override."""
+        self._model = value
 
     @property
     def name(self) -> str:

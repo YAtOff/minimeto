@@ -10,7 +10,7 @@ import json
 import logging
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, TypedDict, override
+from typing import Any, NotRequired, TypedDict, override
 
 from meto.agent.exceptions import SkillAgentNotFoundError, SkillAgentValidationError
 from meto.agent.loaders.agent_loader import AgentLoader
@@ -26,6 +26,10 @@ class SkillMetadata(TypedDict):
     name: str
     description: str
     path: Path
+    allowed_tools: NotRequired[list[str] | None]
+    context: NotRequired[str | None]
+    agent: NotRequired[str | None]
+    model: NotRequired[str | None]
 
 
 class SkillConfig(TypedDict):
@@ -35,6 +39,10 @@ class SkillConfig(TypedDict):
     description: str
     content: str
     resources: list[str]
+    allowed_tools: NotRequired[list[str] | None]
+    context: NotRequired[str | None]
+    agent: NotRequired[str | None]
+    model: NotRequired[str | None]
 
 
 def _validate_skill_config(config: dict[str, Any]) -> list[str]:
@@ -57,6 +65,25 @@ def _validate_skill_config(config: dict[str, Any]) -> list[str]:
     # Name is optional (defaults to directory name)
     if "name" in config and not isinstance(config["name"], str):
         errors.append("'name' must be a string")
+
+    # Optional new fields
+    if "allowed_tools" in config and config["allowed_tools"] is not None:
+        if not isinstance(config["allowed_tools"], list):
+            errors.append("'allowed_tools' must be a list of strings")
+        elif not all(isinstance(t, str) for t in config["allowed_tools"]):
+            errors.append("All items in 'allowed_tools' must be strings")
+
+    if "context" in config and config["context"] is not None:
+        if not isinstance(config["context"], str):
+            errors.append("'context' must be a string")
+
+    if "agent" in config and config["agent"] is not None:
+        if not isinstance(config["agent"], str):
+            errors.append("'agent' must be a string")
+
+    if "model" in config and config["model"] is not None:
+        if not isinstance(config["model"], str):
+            errors.append("'model' must be a string")
 
     return errors
 
@@ -105,8 +132,21 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
                 name = str(metadata.get("name", skill_dir.name))
                 description = str(metadata.get("description", ""))
 
+                # Extract new fields (with dash-to-underscore normalization)
+                allowed_tools = metadata.get("allowed-tools") or metadata.get("allowed_tools")
+                context = metadata.get("context")
+                agent = metadata.get("agent")
+                model = metadata.get("model")
+
                 # Validate
-                config = {"name": name, "description": description}
+                config: dict[str, Any] = {
+                    "name": name,
+                    "description": description,
+                    "allowed_tools": allowed_tools,
+                    "context": context,
+                    "agent": agent,
+                    "model": model,
+                }
                 errors = _validate_skill_config(config)
                 if errors:
                     logger.warning(f"Invalid skill {skill_file}: {', '.join(errors)}")
@@ -117,6 +157,10 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
                     "name": name,
                     "description": description,
                     "path": skill_file,
+                    "allowed_tools": allowed_tools,
+                    "context": context,
+                    "agent": agent,
+                    "model": model,
                 }
                 logger.debug(f"Discovered skill '{name}' at {skill_file}")
 
@@ -129,6 +173,46 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
             Dict mapping skill names to descriptions
         """
         return {name: meta["description"] for name, meta in self._resources.items()}
+
+    def get_skill_config(self, skill_name: str) -> SkillConfig:
+        """Load full skill configuration.
+
+        Args:
+            skill_name: Name of skill to load
+
+        Returns:
+            Full skill configuration dict
+
+        Raises:
+            ValueError: If skill not found
+        """
+        if skill_name not in self._resources:
+            available = ", ".join(sorted(self._resources.keys()))
+            raise ValueError(
+                f"Skill '{skill_name}' not found. Available skills: {available or '(none)'}"
+            )
+
+        skill_meta = self._resources[skill_name]
+        content = self.get_skill_content(skill_name)
+
+        # Find resources
+        skill_path = skill_meta["path"]
+        skill_dir = skill_path.parent
+        resources = []
+        for item in sorted(skill_dir.rglob("*")):
+            if item.is_file() and item.name != "SKILL.md":
+                resources.append(str(item.relative_to(skill_dir)))
+
+        return {
+            "name": skill_meta["name"],
+            "description": skill_meta["description"],
+            "content": content,
+            "resources": resources,
+            "allowed_tools": skill_meta.get("allowed_tools"),
+            "context": skill_meta.get("context"),
+            "agent": skill_meta.get("agent"),
+            "model": skill_meta.get("model"),
+        }
 
     def get_skill_content(self, skill_name: str) -> str:
         """Load full skill content (with caching).
