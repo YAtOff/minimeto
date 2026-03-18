@@ -59,6 +59,15 @@ SKILL_AGENTS_SECTION = """Skill-local Agents (via load_agent + run_task):
 - Only available after loading the parent skill via load_skill
 """
 
+HANDOVER_SECTION = """Autopilot Handover Protocol:
+When you complete a task in autopilot mode, you MUST provide a standardized handover summary at the end of your final response.
+Format:
+### 🎯 Task Completed: [Task ID]
+#### Summary: [Succinct overview of what was implemented/changed]
+#### Discoveries: [Critical findings, architecture notes, or potential issues]
+#### Next Steps: [Actionable advice for the next task or remaining work]
+"""
+
 RULES_SECTION = """Tool Execution Protocol: Pre-Execution Context
 The system may inject relevant rules before tool execution to guide output quality.
 1. Dynamic Re-evaluation: After you initiate a tool_use call, the system may provide "Additional Context" before the tool result is returned.
@@ -136,6 +145,11 @@ class SystemPromptBuilder:
             return TODO_MANAGER_SECTION
         return ""
 
+    def render_handover(self) -> str:
+        if self._is_enabled("autopilot"):
+            return HANDOVER_SECTION
+        return ""
+
     def render_rules(self) -> str:
         if self._is_enabled("rules"):
             return RULES_SECTION
@@ -148,6 +162,7 @@ class SystemPromptBuilder:
             self.render_skills(),
             SKILL_AGENTS_SECTION if self._is_enabled("skills") else "",
             self.render_todo_manager(),
+            self.render_handover(),
             self.render_rules(),
             self.render_agent_prompt(agent_prompt),
             self.render_agentsmd(),
@@ -156,14 +171,17 @@ class SystemPromptBuilder:
         return "\n".join(filter(lambda x: bool(x), parts)) + "\n"
 
 
-def build_system_prompt(agent_prompt: "str" = "") -> str:
+def build_system_prompt(agent_prompt: "str" = "", features: list[str] | None = None) -> str:
     """Build the system prompt using builder pattern.
 
     Args:
         agent_prompt: Optional agent-specific prompt
+        features: Optional list of enabled features (defaults to settings.AGENT_FEATURES)
 
     Note: This re-reads AGENTS.md from disk on each call to allow live updates
     to project instructions. Other resources (subagents, skills) are cached
     within their respective loaders for performance.
     """
-    return SystemPromptBuilder(settings.AGENT_FEATURES).build(agent_prompt)
+    if features is None:
+        features = settings.AGENT_FEATURES
+    return SystemPromptBuilder(features).build(agent_prompt)

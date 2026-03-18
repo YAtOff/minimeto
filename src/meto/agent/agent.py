@@ -73,6 +73,7 @@ class Agent:
     _max_turns: int
     _tools: tuple[dict[str, Any], ...]
     _model: str | None
+    _features: list[str] | None
 
     def __init__(
         self,
@@ -81,6 +82,7 @@ class Agent:
         allowed_tools: list[str] | str,
         max_turns: int,
         model: str | None = None,
+        features: list[str] | None = None,
     ) -> None:
         """Create an Agent.
 
@@ -90,6 +92,7 @@ class Agent:
             allowed_tools: "*" or a list of tool names.
             max_turns: Max model/tool iterations per user prompt.
             model: Optional LLM model override.
+            features: Optional list of enabled features for this agent instance.
         """
         if max_turns <= 0:
             raise ValueError(f"max_turns must be at least 1, got {max_turns}")
@@ -99,6 +102,7 @@ class Agent:
         self._max_turns = max_turns
         self._tools = ()  # Explicitly initialize for basedpyright
         self._model = model
+        self._features = features
 
         # Use the setter to trigger validation
         self.tools = get_tools_for_agent(allowed_tools)
@@ -112,6 +116,16 @@ class Agent:
     def model(self, value: str | None) -> None:
         """Set the model override."""
         self._model = value
+
+    @property
+    def features(self) -> list[str]:
+        """Return the list of enabled features for this agent."""
+        return self._features if self._features is not None else settings.AGENT_FEATURES
+
+    @features.setter
+    def features(self, value: list[str]) -> None:
+        """Set the list of enabled features."""
+        self._features = value
 
     @property
     def name(self) -> str:

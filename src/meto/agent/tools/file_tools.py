@@ -1,7 +1,9 @@
 """File and directory operations."""
 
+import base64
 import difflib
 import logging
+import mimetypes
 import os
 import shutil
 import subprocess
@@ -214,6 +216,16 @@ def read_file(
             return f"Error: File does not exist: {path}"
         if not file_path.is_file():
             return f"Error: Not a file: {path}"
+
+        # Image support: Detect if the file is an image
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        if mime_type and mime_type.startswith("image/"):
+            try:
+                raw_bytes = file_path.read_bytes()
+                encoded_data = base64.b64encode(raw_bytes).decode("utf-8")
+                return f"__METO_IMAGE__:data:{mime_type};base64,{encoded_data}"
+            except (PermissionError, OSError) as e:
+                return f"Error reading image file {path}: {e}"
 
         lines = file_path.read_text(encoding="utf-8").splitlines()
         total_lines = len(lines)

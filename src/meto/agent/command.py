@@ -12,7 +12,9 @@ from rich.table import Table
 
 from meto.agent.agent import Agent, get_tools_for_agent
 from meto.agent.agent_loop import run_agent_loop
+from meto.agent.autopilot.loop import run_autopilot_loop
 from meto.agent.context import Context
+from meto.agent.exceptions import AgentInterrupted
 from meto.agent.history_export import (
     dump_agent_context,
     format_context_summary,
@@ -462,6 +464,45 @@ def rewind(ctx: click.Context, name: str):
         click.echo(f"Rewound history to checkpoint '{name}'.")
     else:
         click.echo(f"Checkpoint '{name}' not found.", err=True)
+
+
+@chat_commands.command()
+@click.argument("goal", nargs=-1)
+@click.pass_context
+def autopilot(ctx: click.Context, goal: tuple[str, ...]):
+    """Start an autonomous autopilot session.
+    Usage: /autopilot [goal...]
+    """
+    session = ctx.obj["session"]
+    goal_str = " ".join(goal)
+
+    if not goal_str:
+        click.echo("Error: Please provide a goal for the autopilot session.", err=True)
+        return
+
+    # Autopilot mode requires its own loop
+    context = Context(
+        todos=TodoManager(),
+        history=session.history,
+        session=session,
+        context_id=session.session_id,
+    )
+
+    try:
+        # Enable autopilot feature temporarily for this execution if not already enabled
+        autopilot_features = list(settings.AGENT_FEATURES)
+        if "autopilot" not in autopilot_features:
+            autopilot_features.append("autopilot")
+
+        for output in run_autopilot_loop(goal_str, context, features=autopilot_features):
+            click.echo(output, nl=False)
+    except (AgentInterrupted, KeyboardInterrupt):
+        logger.info("Autopilot interrupted by user")
+        click.echo("\n[yellow]Autopilot interrupted by user[/]", err=True)
+        raise
+    except Exception as e:
+        logger.exception(f"Autopilot session failed: {e}")
+        click.echo(f"\n[bold red]Error:[/] Autopilot failed: {e}", err=True)
 
 
 @chat_commands.command()

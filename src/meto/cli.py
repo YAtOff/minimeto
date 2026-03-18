@@ -12,6 +12,7 @@ from prompt_toolkit.enums import EditingMode
 
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
+from meto.agent.autopilot.loop import run_autopilot_loop
 from meto.agent.command import NewSessionException, execute_chat_command
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MCPInitializationError, SessionNotFoundError
@@ -132,6 +133,13 @@ def run(
             help="Enable YOLO mode (skip all permission checks)",
         ),
     ] = False,
+    autopilot: Annotated[
+        bool,
+        typer.Option(
+            "--autopilot",
+            help="Start an autonomous autopilot session using the prompt as goal.",
+        ),
+    ] = False,
 ) -> None:
     """Run meto."""
 
@@ -143,6 +151,45 @@ def run(
     except SessionNotFoundError as e:
         print(f"[Warning] {e}. Starting a new session.", file=sys.stderr)
         session = Session.new(yolo=yolo)
+
+    if autopilot:
+        # Determine goal source (prompt or stdin)
+        if prompt is not None:
+            goal_text = prompt.strip()
+        else:
+            # Read stdin once
+            stdin_text = sys.stdin.read()
+            goal_text = stdin_text.strip()
+            if not goal_text:
+                raise typer.BadParameter(
+                    "Either stdin or --prompt must be provided with --autopilot mode.\n"
+                    "Usage: meto --autopilot --prompt 'your goal' | echo 'your goal' | meto --autopilot",
+                    param_hint="--autopilot",
+                )
+
+        # Execute autopilot loop
+        autopilot_features = list(settings.AGENT_FEATURES)
+        if "autopilot" not in autopilot_features:
+            autopilot_features.append("autopilot")
+
+        context = Context(
+            todos=TodoManager(),
+            history=session.history,
+            session=session,
+            context_id=session.session_id,
+        )
+
+        try:
+            for output in run_autopilot_loop(goal_text, context, features=autopilot_features):
+                print(output, end="", flush=True)
+        except (AgentInterrupted, KeyboardInterrupt):
+            print("\n[Autopilot interrupted]", file=sys.stderr, flush=True)
+            raise typer.Exit(code=130) from None
+        except Exception as e:
+            logger.exception(f"Autopilot failed: {e}")
+            print(f"\n[Error] Autopilot failed: {e}", file=sys.stderr)
+            raise typer.Exit(code=1) from None
+        raise typer.Exit(code=0)
 
     if one_shot:
         # Determine input source based on precedence rules
@@ -162,7 +209,7 @@ def run(
         # Execute the single prompt
         try:
             _run_single_prompt(input_text, session)
-        except AgentInterrupted:
+        except (AgentInterrupted, KeyboardInterrupt):
             print("\n[Agent interrupted]", file=sys.stderr, flush=True)
             sys.stdout.flush()
             sys.stderr.flush()

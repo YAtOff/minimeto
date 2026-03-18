@@ -80,7 +80,7 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "read_file",
             "description": (
-                "Read the contents of a file and return them as text. "
+                "Read the contents of a file and return them as text or image. "
                 "Optionally specify a line range."
             ),
             "parameters": {

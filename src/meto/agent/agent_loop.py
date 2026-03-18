@@ -19,6 +19,7 @@ from typing import Any, cast
 import openai
 
 from meto.agent.agent import Agent
+from meto.agent.autopilot.pruning import summarize_tool_output
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, LLMError, MaxStepsExceededError
 from meto.agent.hooks import (
@@ -68,7 +69,9 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
         register_tool_handler(registration.name, registration.handler)
 
     with ReasoningLogger(agent.name) as reasoning_logger:
-        reasoning_logger.log_system_prompt(build_system_prompt(agent.prompt))
+        reasoning_logger.log_system_prompt(
+            build_system_prompt(agent.prompt, features=agent.features)
+        )
         reasoning_logger.log_user_input(prompt)
         context.add_message({"role": "user", "content": prompt})
 
@@ -84,7 +87,7 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
 
                 # The OpenAI SDK uses large TypedDict unions for `messages` and `tools`.
                 # Our history is intentionally JSON-shaped, so treat these as dynamic.
-                system_prompt = build_system_prompt(agent.prompt)
+                system_prompt = build_system_prompt(agent.prompt, features=agent.features)
                 messages: Any = [
                     {"role": "system", "content": system_prompt},
                     *context.history,
@@ -234,6 +237,8 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                         arguments,
                         reasoning_logger,
                     )
+
+                    tool_output = summarize_tool_output(fn_name, tool_output)
 
                     # Check post-execution hooks
                     post_tool_hook_result = post_tool_use(fn_name, arguments, tool_output, context)

@@ -234,7 +234,7 @@ class Settings(BaseSettings):
     @classmethod
     def validate_features(cls, v: list[str]) -> list[str]:
         """Validate that all enabled features are supported."""
-        allowed = {"agentsmd", "subagents", "skills", "todo_manager", "mcp", "rules"}
+        allowed = {"agentsmd", "subagents", "skills", "todo_manager", "mcp", "rules", "autopilot"}
         invalid = set(v) - allowed
         if invalid:
             raise ValueError(f"Unsupported features: {', '.join(invalid)}")
