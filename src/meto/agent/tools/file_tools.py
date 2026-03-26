@@ -1,9 +1,7 @@
 """File and directory operations."""
 
-import base64
 import difflib
 import logging
-import mimetypes
 import os
 import shutil
 import subprocess
@@ -12,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from meto.agent.context import Context
+from meto.agent.image_utils import encode_image, is_image
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
 
@@ -218,11 +217,9 @@ def read_file(
             return f"Error: Not a file: {path}"
 
         # Image support: Detect if the file is an image
-        mime_type, _ = mimetypes.guess_type(str(file_path))
-        if mime_type and mime_type.startswith("image/"):
+        if is_image(str(file_path)):
             try:
-                raw_bytes = file_path.read_bytes()
-                encoded_data = base64.b64encode(raw_bytes).decode("utf-8")
+                mime_type, encoded_data = encode_image(str(file_path))
                 return f"__METO_IMAGE__:data:{mime_type};base64,{encoded_data}"
             except (PermissionError, OSError) as e:
                 return f"Error reading image file {path}: {e}"

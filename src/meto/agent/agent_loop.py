@@ -27,6 +27,7 @@ from meto.agent.hooks import (
     pre_tool_use,
 )
 from meto.agent.hooks.rule_injection import RuleInjectionHook
+from meto.agent.image_utils import detect_images_in_prompt, encode_image
 from meto.agent.orchestrator.client import get_client
 from meto.agent.orchestrator.signals import handle_interrupt
 from meto.agent.reasoning_log import ReasoningLogger
@@ -73,7 +74,19 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
             build_system_prompt(agent.prompt, features=agent.features)
         )
         reasoning_logger.log_user_input(prompt)
-        context.add_message({"role": "user", "content": prompt})
+
+        # Scan for images in the initial prompt to proactively attach them
+        image_paths = detect_images_in_prompt(prompt)
+        if image_paths:
+            content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+            for path in image_paths:
+                mime, data = encode_image(path)
+                content.append(
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{data}"}}
+                )
+            context.add_message({"role": "user", "content": content})
+        else:
+            context.add_message({"role": "user", "content": prompt})
 
         # Reset rule injection tracking for this new prompt
         RuleInjectionHook.reset_injected_rules()
@@ -254,6 +267,22 @@ def run_agent_loop(agent: Agent, prompt: str, context: Context) -> Generator[str
                             "content": tool_output,
                         }
                     )
+
+                    # Multimodal Injection (Task 4): If the tool output is an image tag,
+                    # inject a multimodal user message so the model can see the image.
+                    if tool_output.startswith("__METO_IMAGE__:"):
+                        image_url = tool_output.removeprefix("__METO_IMAGE__:")
+                        context.add_message(
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {"url": image_url},
+                                    }
+                                ],
+                            }
+                        )
 
                     if context.pending_tools:
                         existing_tool_names = set(agent.tool_names)
