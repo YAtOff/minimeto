@@ -17,6 +17,7 @@ from meto.agent.command import NewSessionException, execute_chat_command
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MCPInitializationError, SessionNotFoundError
 from meto.agent.mcp_client import initialize_mcp_registry
+from meto.agent.reasoning_log import reasoning_log_file
 from meto.agent.session import Session
 from meto.agent.syntax_expander import SyntaxExpander
 from meto.agent.todo import TodoManager
@@ -69,8 +70,11 @@ def _run_single_prompt(
         print(output, flush=True)
 
 
-def interactive_loop(session: Session) -> None:
+def interactive_loop(session: Session) -> Session:
     """Run interactive prompt loop with slash command and agent execution."""
+    print(f"Session log: {session.history.session_logger.session_file}", flush=True)
+    print(f"Reasoning log: {reasoning_log_file()}", flush=True)
+
     # Create history instance (or None if disabled)
     history = create_history()
 
@@ -83,7 +87,7 @@ def interactive_loop(session: Session) -> None:
         try:
             user_input = prompt_session.prompt(">>> ")
         except (EOFError, KeyboardInterrupt):
-            return
+            return session
 
         try:
             _run_single_prompt(user_input, session)
@@ -91,7 +95,7 @@ def interactive_loop(session: Session) -> None:
             session = Session.new()
             print(f"[New session: {session.session_id}]", flush=True)
         except typer.Exit:
-            return
+            return session
         except Exception as e:
             logger.exception(f"Unexpected error processing user input: {e}")
             print(f"[Error] An unexpected error occurred: {e}", file=sys.stderr)
@@ -99,6 +103,7 @@ def interactive_loop(session: Session) -> None:
                 "The session has been preserved. You can continue or type /exit to restart.",
                 file=sys.stderr,
             )
+            return session
 
 
 @app.callback(invoke_without_command=True)
@@ -218,7 +223,10 @@ def run(
         sys.stderr.flush()
         raise typer.Exit(code=0)
 
-    interactive_loop(session=session)
+    try:
+        session = interactive_loop(session=session)
+    finally:
+        print(f"\nTo resume this session, run: meto --session {session.session_id}")
 
 
 def main() -> None:
