@@ -118,3 +118,12 @@ class BaseResourceLoader[T]:
         self._resources = {}
         self._errors = {}
         self._loaded = False
+
+    def get_resources(self) -> dict[str, T]:
+        """Return all discovered resources.
+
+        Returns:
+            Dict mapping resource names to their metadata.
+        """
+        self._ensure_loaded()
+        return self._resources

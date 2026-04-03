@@ -120,10 +120,17 @@ class SystemPromptBuilder:
         if self._is_enabled("subagents"):
             agents = get_agents()
             if agents:
-                agent_lines = [
-                    f"- {name}: {config['description']}" for name, config in agents.items()
-                ]
-                agents_list = "Available subagents:\n" + "\n".join(agent_lines)
+                promoted_agents = {
+                    name: meta for name, meta in agents.items() if meta.get("promoted", True)
+                }
+                if promoted_agents:
+                    agent_lines = [
+                        f"- {name}: {meta['description']}"
+                        for name, meta in sorted(promoted_agents.items())
+                    ]
+                    agents_list = "Available subagents:\n" + "\n".join(agent_lines)
+                else:
+                    agents_list = "Available subagents: (none promoted)"
             else:
                 agents_list = "Available subagents: (none)"
             return SUBAGENTS_SECTION.format(agents_list=agents_list)
@@ -131,10 +138,20 @@ class SystemPromptBuilder:
 
     def render_skills(self) -> str:
         if self._is_enabled("skills"):
-            skills = get_skill_loader().get_skill_descriptions()
+            loader = get_skill_loader()
+            skills = loader.get_resources()
             if skills:
-                skill_lines = [f"- {name}: {desc}" for name, desc in sorted(skills.items())]
-                skills_list = "Available skills:\n" + "\n".join(skill_lines)
+                promoted_skills = {
+                    name: meta for name, meta in skills.items() if meta.get("promoted", True)
+                }
+                if promoted_skills:
+                    skill_lines = [
+                        f"- {name}: {meta['description']}"
+                        for name, meta in sorted(promoted_skills.items())
+                    ]
+                    skills_list = "Available skills:\n" + "\n".join(skill_lines)
+                else:
+                    skills_list = "Available skills: (none promoted)"
             else:
                 skills_list = "Available skills: (none)"
             return SKILLS_SECTION.format(skills_list=skills_list)

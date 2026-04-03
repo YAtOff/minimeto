@@ -30,6 +30,7 @@ class SkillMetadata(TypedDict):
     context: NotRequired[str | None]
     agent: NotRequired[str | None]
     model: NotRequired[str | None]
+    promoted: bool
 
 
 class SkillConfig(TypedDict):
@@ -43,6 +44,7 @@ class SkillConfig(TypedDict):
     context: NotRequired[str | None]
     agent: NotRequired[str | None]
     model: NotRequired[str | None]
+    promoted: bool
 
 
 def _validate_skill_config(config: dict[str, Any]) -> list[str]:
@@ -84,6 +86,9 @@ def _validate_skill_config(config: dict[str, Any]) -> list[str]:
     if "model" in config and config["model"] is not None:
         if not isinstance(config["model"], str):
             errors.append("'model' must be a string")
+
+    if "promoted" in config and not isinstance(config["promoted"], bool):
+        errors.append("'promoted' must be a boolean")
 
     return errors
 
@@ -137,6 +142,7 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
                 context = metadata.get("context")
                 agent = metadata.get("agent")
                 model = metadata.get("model")
+                promoted = metadata.get("promoted", True)
 
                 # Validate
                 config: dict[str, Any] = {
@@ -146,6 +152,7 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
                     "context": context,
                     "agent": agent,
                     "model": model,
+                    "promoted": promoted,
                 }
                 errors = _validate_skill_config(config)
                 if errors:
@@ -161,6 +168,7 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
                     "context": context,
                     "agent": agent,
                     "model": model,
+                    "promoted": promoted,
                 }
                 logger.debug(f"Discovered skill '{name}' at {skill_file}")
 
@@ -212,6 +220,7 @@ class SkillLoader(BaseResourceLoader[SkillMetadata]):
             "context": skill_meta.get("context"),
             "agent": skill_meta.get("agent"),
             "model": skill_meta.get("model"),
+            "promoted": skill_meta["promoted"],
         }
 
     def get_skill_content(self, skill_name: str) -> str:

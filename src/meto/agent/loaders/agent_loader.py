@@ -27,6 +27,7 @@ class AgentConfig(TypedDict):
     description: str
     tools: list[str] | str
     prompt: str
+    promoted: bool
 
 
 class AgentMetadata(TypedDict):
@@ -36,6 +37,7 @@ class AgentMetadata(TypedDict):
     tools: list[str] | str
     prompt: str
     path: Path
+    promoted: bool
 
 
 def get_tools_for_agent(requested_tools: list[str] | str) -> list[dict[str, Any]]:
@@ -128,6 +130,10 @@ def validate_agent_config(config: dict[str, Any]) -> list[str]:
     if "prompt" not in config or not config["prompt"]:
         errors.append("Missing or empty 'prompt' (must be in frontmatter or markdown body)")
 
+    # Check promoted field
+    if "promoted" in config and not isinstance(config["promoted"], bool):
+        errors.append("'promoted' must be a boolean")
+
     return errors
 
 
@@ -178,11 +184,17 @@ class AgentLoader(BaseResourceLoader[AgentMetadata]):
         # Get name from frontmatter or filename
         name = metadata.get("name", path.stem)
 
+        # Default promoted based on path: True if built-in, False otherwise
+        # Built-in agents are in settings.DEFAULT_RESOURCES_DIR / "agents"
+        built_in_dir = settings.DEFAULT_RESOURCES_DIR / "agents"
+        is_built_in = path.resolve().is_relative_to(built_in_dir.resolve())
+
         # Build config dict
         config = {
             "name": name,
             "description": metadata.get("description", ""),
             "tools": metadata.get("tools", []),
+            "promoted": metadata.get("promoted", is_built_in),
         }
 
         # Prompt can be in frontmatter or body
@@ -198,6 +210,7 @@ class AgentLoader(BaseResourceLoader[AgentMetadata]):
             "description": config["description"],
             "tools": config["tools"],
             "prompt": config["prompt"],
+            "promoted": config["promoted"],
         }, []
 
     def parse_agent_file(self, path: Path) -> AgentConfig | None:
@@ -266,6 +279,7 @@ class AgentLoader(BaseResourceLoader[AgentMetadata]):
             "description": metadata["description"],
             "tools": metadata["tools"],
             "prompt": metadata["prompt"],
+            "promoted": metadata["promoted"],
         }
 
 

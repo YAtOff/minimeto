@@ -113,10 +113,13 @@ tools:
   - shell
   - read_file
   - grep_search
+promoted: false
 ---
 
 Agent-specific prompt instructions...
 ```
+
+**Promoted Agents & Skills**: By default, all built-in agents and all skills are "promoted", meaning they are included in the system prompt. Custom agents are not promoted by default. Promoted resources are visible to the LLM at all times. Not promoted resources can still be used via shorthand syntax (`@agent`, `~skill`) or the `/use` command. Use `promoted: true/false` in the frontmatter to override this behavior.
 
 **Skills** (`.meto/skills/{skill-name}/SKILL.md`): Domain expertise modules lazy-loaded via `load_skill` tool. Use for coding standards, domain knowledge, workflows, etc.
 
