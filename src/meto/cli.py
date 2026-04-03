@@ -24,6 +24,7 @@ from meto.agent.todo import TodoManager
 from meto.agent.tool_registry import registry
 from meto.conf import settings
 from meto.history import create_history
+from meto.version import get_version
 
 app = typer.Typer(add_completion=False)
 logger = logging.getLogger(__name__)
@@ -70,8 +71,24 @@ def _run_single_prompt(
         print(output, flush=True)
 
 
+MASCOT = r"""
+  ·°·
+ (  ᵔ  )
+  │▒│
+ ╘═╛
+"""
+
+
+def print_banner() -> None:
+    """Print the meto mascot and version on startup."""
+    print(MASCOT.strip(), flush=True)
+    print(f"  meto v{get_version()}", flush=True)
+    print(flush=True)
+
+
 def interactive_loop(session: Session) -> Session:
     """Run interactive prompt loop with slash command and agent execution."""
+    print_banner()
     print(f"Session log: {session.history.session_logger.session_file}", flush=True)
     print(f"Reasoning log: {reasoning_log_file()}", flush=True)
 
