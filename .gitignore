@@ -196,3 +196,7 @@ ralph/*
 !ralph/ralph.sh
 !ralph/prompt.md
 tasks/
+
+
+# APM dependencies
+apm_modules/

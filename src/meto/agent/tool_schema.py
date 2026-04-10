@@ -81,7 +81,8 @@ TOOLS: list[dict[str, Any]] = [
             "name": "read_file",
             "description": (
                 "Read the contents of a file and return them as text or image. "
-                "Optionally specify a line range."
+                "Files are paginated (default: 500 lines) with prepended line numbers. "
+                "Optionally specify a line range to avoid context overflow."
             ),
             "parameters": {
                 "type": "object",
@@ -92,11 +93,11 @@ TOOLS: list[dict[str, Any]] = [
                     },
                     "start_line": {
                         "type": "integer",
-                        "description": "The 1-based line number to start reading from (inclusive).",
+                        "description": "The 1-based line number to start reading from (inclusive, defaults to 1).",
                     },
                     "end_line": {
                         "type": "integer",
-                        "description": "The 1-based line number to end reading at (exclusive).",
+                        "description": "The 1-based line number to end reading at (inclusive, defaults to start_line + 499).",
                     },
                 },
                 "required": ["path"],

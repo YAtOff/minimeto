@@ -48,7 +48,8 @@ def test_read_file_success(tmp_path, mock_context):
     file_path.write_text(content)
 
     result = read_file(mock_context, str(file_path))
-    assert result == content
+    assert "1 | test content" in result
+    assert "[FILE: " in result
 
 
 def test_read_file_range(tmp_path, mock_context):
@@ -57,10 +58,27 @@ def test_read_file_range(tmp_path, mock_context):
     file_path.write_text(content)
 
     result = read_file(mock_context, str(file_path), start_line=2, end_line=4)
-    assert "lines 2-4" in result
-    assert "line2\nline3\nline4" in result
-    assert "line1" not in result
-    assert "line5" not in result
+    assert "Lines 2-4" in result
+    assert "2 | line2\n3 | line3\n4 | line4" in result
+    assert "1 | line1" not in result
+    assert "5 | line5" not in result
+
+
+def test_read_file_pagination(tmp_path, mock_context):
+    from meto.agent.tools.file_tools import MAX_READ_LINES
+
+    file_path = tmp_path / "large.txt"
+    content = "\n".join([f"line{i+1}" for i in range(MAX_READ_LINES + 10)])
+    file_path.write_text(content)
+
+    # Read without range - should truncate to MAX_READ_LINES
+    result = read_file(mock_context, str(file_path))
+    assert f"Lines 1-{MAX_READ_LINES}" in result
+    assert "TRUNCATED" in result
+    assert "TRUNCATION WARNING" in result
+    assert f"read_file(path=\"{file_path}\", start_line={MAX_READ_LINES + 1})" in result
+    assert f"{MAX_READ_LINES} | line{MAX_READ_LINES}" in result
+    assert f"{MAX_READ_LINES + 1} | line{MAX_READ_LINES + 1}" not in result
 
 
 def test_read_file_not_found(mock_context):

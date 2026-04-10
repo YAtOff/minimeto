@@ -31,6 +31,7 @@ Rules:
 - When you need a tool you don't have, use search_available_tools first.
 - Make minimal changes. Don't over-engineer.
 - Keep outputs succinct; summarize what you learned.
+- If a file is too large for the read_file tool, do not attempt to bypass this using `cat` or `sed`. Instead, use the read_file tool iteratively with line ranges or use grep_search to find the relevant section.
 
 """
 

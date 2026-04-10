@@ -25,6 +25,8 @@ FILE_WRITE_OS_ERROR = "file_write_os_error"
 FILE_BINARY_READ_ERROR = "file_binary_read_error"
 FILE_STAT_ERROR = "file_stat_error"
 
+MAX_READ_LINES = 500
+
 
 # --- Diff helpers ---
 
@@ -197,16 +199,16 @@ def read_file(
     start_line: int | None = None,
     end_line: int | None = None,
 ) -> str:
-    """Read file contents with proper error handling and optional line range.
+    """Read file contents with proper error handling, line numbering, and pagination.
 
     Args:
         _context: Execution context (unused)
         path: Path to the file to read
-        start_line: 1-based line number to start reading from (inclusive)
-        end_line: 1-based line number to end reading at (inclusive)
+        start_line: 1-based line number to start reading from (inclusive, defaults to 1)
+        end_line: 1-based line number to end reading at (inclusive, defaults to start_line + 499)
 
     Returns:
-        The file content or an error message string
+        The file content with line numbers or an error message string
     """
 
     try:
@@ -227,28 +229,47 @@ def read_file(
         lines = file_path.read_text(encoding="utf-8").splitlines()
         total_lines = len(lines)
 
-        if start_line is not None or end_line is not None:
-            # 1-based indexing for users (inclusive start/end)
-            start = (start_line - 1) if start_line is not None else 0
-            end = end_line if end_line is not None else total_lines
+        # Enforce defaults and pagination
+        effective_start = (start_line if start_line is not None else 1)
+        effective_end = (end_line if end_line is not None else effective_start + MAX_READ_LINES - 1)
 
-            # Bounds checking
-            start = max(0, min(start, total_lines))
-            end = max(0, min(end, total_lines))
+        # Ensure range is valid and fits within limits
+        if effective_end - effective_start >= MAX_READ_LINES:
+            effective_end = effective_start + MAX_READ_LINES - 1
 
-            if start >= end:
-                return f"Error: Invalid range {start_line}-{end_line} for file with {total_lines} lines"
+        # 0-indexed internal logic
+        start_idx = max(0, min(effective_start - 1, total_lines))
+        end_idx = max(0, min(effective_end, total_lines))
 
-            selected_lines = lines[start:end]
-            content = "\n".join(selected_lines)
-            if end < total_lines:
-                content += "\n..."
+        if start_idx >= end_idx and total_lines > 0:
+            return f"Error: Invalid range {effective_start}-{effective_end} for file with {total_lines} lines"
 
-            header = f"Reading lines {start + 1}-{end} of {total_lines} from {path}:\n"
-            return header + truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
+        selected_lines = lines[start_idx:end_idx]
 
-        content = "\n".join(lines)
-        return truncate(content, settings.MAX_TOOL_OUTPUT_CHARS)
+        # Format with line numbers: "10 | content"
+        formatted_lines = [
+            f"{start_idx + i + 1} | {line}"
+            for i, line in enumerate(selected_lines)
+        ]
+        content = "\n".join(formatted_lines)
+
+        # Build output with metadata and warnings
+        is_truncated = (start_idx > 0 or end_idx < total_lines)
+        header = f"[FILE: {path} | Lines {start_idx + 1}-{end_idx} of {total_lines}"
+        if is_truncated:
+            header += " | TRUNCATED"
+        header += "]\n"
+
+        result = header + content
+
+        if is_truncated:
+            footer = f"\n\n[TRUNCATION WARNING]: This file is {total_lines} lines long. You are seeing a {len(selected_lines)}-line window."
+            if end_idx < total_lines:
+                footer += f"\nTo see more, use: read_file(path=\"{path}\", start_line={end_idx + 1})"
+            footer += "\nTo find specific code, use the grep_search tool."
+            result += footer
+
+        return truncate(result, settings.MAX_TOOL_OUTPUT_CHARS)
     except UnicodeDecodeError:
         return f"Error: Cannot decode file {path} as UTF-8 text"
     except PermissionError:
