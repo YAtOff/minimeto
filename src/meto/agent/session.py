@@ -7,6 +7,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import threading
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
@@ -490,3 +491,40 @@ class Session:
         reloaded, messages before this marker will be skipped.
         """
         self.history.log_compact(summary)
+
+    @classmethod
+    def fork(cls, parent_session: Session) -> Session:
+        """Create a new session by forking from an existing one.
+
+        Copies the full conversation history (log.jsonl) from the parent
+        session to a new session directory. The new session gets its own
+        session ID and a reference to the parent.
+
+        Args:
+            parent_session: The session to fork from.
+
+        Returns:
+            A new Session with a copy of the parent's history.
+        """
+        new_id = generate_session_id()
+        parent_log_dir = parent_session.history.session_logger.log_dir
+        new_log_dir = settings.SESSION_DIR / new_id
+
+        # Copy the entire session directory
+        shutil.copytree(parent_log_dir, new_log_dir)
+
+        # Rewrite the header line to reference new session ID and parent
+        new_session_file = new_log_dir / "log.jsonl"
+        lines = new_session_file.read_text(encoding="utf-8").splitlines(keepends=True)
+        if lines:
+            try:
+                header = json.loads(lines[0])
+                header["session_id"] = new_id
+                header["parent_session_id"] = parent_session.session_id
+                lines[0] = json.dumps(header, ensure_ascii=False) + "\n"
+                new_session_file.write_text("".join(lines), encoding="utf-8")
+            except (json.JSONDecodeError, IndexError):
+                logger.warning("Could not rewrite fork header; keeping original")
+
+        # Load the new session from the copied directory
+        return cls.load(new_id)

@@ -13,7 +13,7 @@ from prompt_toolkit.enums import EditingMode
 from meto.agent.agent import Agent
 from meto.agent.agent_loop import run_agent_loop
 from meto.agent.autopilot.loop import run_autopilot_loop
-from meto.agent.command import NewSessionException, execute_chat_command
+from meto.agent.command import ForkSessionException, NewSessionException, execute_chat_command
 from meto.agent.context import Context
 from meto.agent.exceptions import AgentInterrupted, MCPInitializationError, SessionNotFoundError
 from meto.agent.mcp_client import initialize_mcp_registry
@@ -111,6 +111,13 @@ def interactive_loop(session: Session) -> Session:
         except NewSessionException:
             session = Session.new()
             print(f"[New session: {session.session_id}]", flush=True)
+        except ForkSessionException:
+            new_session = Session.fork(session)
+            print(
+                f"[Forked session: {new_session.session_id} (parent: {session.session_id})]",
+                flush=True,
+            )
+            session = new_session
         except typer.Exit:
             return session
         except Exception as e:

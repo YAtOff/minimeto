@@ -37,6 +37,12 @@ class NewSessionException(Exception):
     pass
 
 
+class ForkSessionException(Exception):
+    """Signal to fork the current session into a new one."""
+
+    pass
+
+
 @click.group()
 @click.pass_context
 def chat_commands(ctx: click.Context):
@@ -104,6 +110,13 @@ def show_help(ctx: click.Context):
 def new(ctx: click.Context):  # pyright: ignore[reportUnusedParameter]
     """Start a new session with fresh context."""
     raise NewSessionException
+
+
+@chat_commands.command()
+@click.pass_context
+def fork(ctx: click.Context):  # pyright: ignore[reportUnusedParameter]
+    """Fork current session into a new one, preserving this session."""
+    raise ForkSessionException
 
 
 @chat_commands.command()
@@ -609,3 +622,5 @@ def execute_chat_command(cmdline: str, session: "Session") -> tuple[bool, str]:
         raise  # Propagate Exit to terminate REPL
     except NewSessionException:
         raise  # Propagate to create new session
+    except ForkSessionException:
+        raise  # Propagate to fork session
