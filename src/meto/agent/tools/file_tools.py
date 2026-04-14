@@ -14,7 +14,40 @@ from meto.agent.image_utils import encode_image, is_image
 from meto.agent.shell import format_size, pick_shell_runner, run_shell, truncate
 from meto.conf import settings
 
+try:
+    from tree_sitter_languages import get_language, get_parser
+
+    _ts_available = True
+except ImportError:
+    _ts_available = False
+    get_language = None  # type: ignore
+    get_parser = None  # type: ignore
+
+TS_AVAILABLE: bool = _ts_available
+
 logger = logging.getLogger(__name__)
+
+# --- Code Map Constants ---
+
+# These queries target definitions across different languages.
+QUERIES = {
+    "python": """
+        (class_definition name: (identifier) @name) @class
+        (function_definition name: (identifier) @name) @func
+    """,
+    "javascript": """
+        (class_declaration name: (identifier) @name) @class
+        (function_declaration name: (identifier) @name) @func
+        (method_definition name: (property_identifier) @name) @method
+        (variable_declarator name: (identifier) @name value: [(arrow_function) (function_expression)]) @func
+    """,
+    "typescript": """
+        (class_declaration name: (identifier) @name) @class
+        (function_declaration name: (identifier) @name) @func
+        (method_definition name: (property_identifier) @name) @method
+        (interface_declaration name: (type_identifier) @name) @interface
+    """,
+}
 
 # --- Error IDs ---
 FILE_PATH_RESOLUTION_ERROR = "file_path_resolution_error"
@@ -26,6 +59,60 @@ FILE_BINARY_READ_ERROR = "file_binary_read_error"
 FILE_STAT_ERROR = "file_stat_error"
 
 MAX_READ_LINES = 500
+
+
+# --- Code Map logic ---
+
+
+def detect_lang(path: str) -> str | None:
+    """Detect language key for tree-sitter mapping based on file extension."""
+    ext = Path(path).suffix.lower()
+    mapping = {
+        ".py": "python",
+        ".js": "javascript",
+        ".mjs": "javascript",
+        ".cjs": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+    }
+    return mapping.get(ext)
+
+
+def get_code_map(file_path: Path, lang_key: str) -> str:
+    """Generates a structural map of a file to prevent LLM context flooding."""
+    if not TS_AVAILABLE or lang_key not in QUERIES:
+        return f"Structural mapping for {lang_key} is not supported."
+
+    assert get_language is not None
+    assert get_parser is not None
+
+    try:
+        language = get_language(lang_key)
+        parser = get_parser(lang_key)
+
+        code = file_path.read_bytes()
+        tree = parser.parse(code)
+        query = language.query(QUERIES[lang_key])
+        captures = query.captures(tree.root_node)
+
+        lines = []
+        for node, tag in captures:
+            # We only want the container node (the class/func), not the name identifier node
+            if tag in ["class", "func", "method", "interface"]:
+                name_node = node.child_by_field_name("name")
+                if not name_node:
+                    continue
+
+                name = code[name_node.start_byte : name_node.end_byte].decode("utf-8")
+                start = node.start_point[0] + 1
+                end = node.end_point[0] + 1
+
+                lines.append(f"[{tag.upper()}] {name} (Lines {start}-{end})")
+
+        return "\n".join(lines) if lines else "No significant definitions found."
+    except Exception as ex:
+        logger.warning(f"Error generating code map for {file_path}: {ex}")
+        return f"Error generating structural map: {ex}"
 
 
 # --- Diff helpers ---
@@ -228,10 +315,26 @@ def read_file(
 
         lines = file_path.read_text(encoding="utf-8").splitlines()
         total_lines = len(lines)
+        file_size = file_path.stat().st_size
 
         # Enforce defaults and pagination
-        effective_start = (start_line if start_line is not None else 1)
-        effective_end = (end_line if end_line is not None else effective_start + MAX_READ_LINES - 1)
+        effective_start = start_line if start_line is not None else 1
+        effective_end = end_line if end_line is not None else effective_start + MAX_READ_LINES - 1
+
+        # Code Map Interceptor: If file is large and range is wide, return map
+        requested_range = effective_end - effective_start + 1
+        if total_lines > 600 or file_size > 30000:
+            # If no bounds were provided OR the requested range is very large (> 400 lines)
+            if (start_line is None and end_line is None) or requested_range > 400:
+                lang_key = detect_lang(str(file_path))
+                if lang_key:
+                    code_map = get_code_map(file_path, lang_key)
+                    return (
+                        f"FILE TOO LARGE ({total_lines} lines, {format_size(file_size)}). "
+                        "To save context, I have generated a structural map:\n\n"
+                        f"{code_map}\n\n"
+                        "INSTRUCTION: Use read_file(path, start_line, end_line) to read a specific range."
+                    )
 
         # Ensure range is valid and fits within limits
         if effective_end - effective_start >= MAX_READ_LINES:
@@ -247,14 +350,11 @@ def read_file(
         selected_lines = lines[start_idx:end_idx]
 
         # Format with line numbers: "10 | content"
-        formatted_lines = [
-            f"{start_idx + i + 1} | {line}"
-            for i, line in enumerate(selected_lines)
-        ]
+        formatted_lines = [f"{start_idx + i + 1} | {line}" for i, line in enumerate(selected_lines)]
         content = "\n".join(formatted_lines)
 
         # Build output with metadata and warnings
-        is_truncated = (start_idx > 0 or end_idx < total_lines)
+        is_truncated = start_idx > 0 or end_idx < total_lines
         header = f"[FILE: {path} | Lines {start_idx + 1}-{end_idx} of {total_lines}"
         if is_truncated:
             header += " | TRUNCATED"
@@ -265,7 +365,7 @@ def read_file(
         if is_truncated:
             footer = f"\n\n[TRUNCATION WARNING]: This file is {total_lines} lines long. You are seeing a {len(selected_lines)}-line window."
             if end_idx < total_lines:
-                footer += f"\nTo see more, use: read_file(path=\"{path}\", start_line={end_idx + 1})"
+                footer += f'\nTo see more, use: read_file(path="{path}", start_line={end_idx + 1})'
             footer += "\nTo find specific code, use the grep_search tool."
             result += footer
 
